@@ -17,7 +17,6 @@ logger = logging.getLogger(__name__)
 
 MODULE_NAME = 'training'
 
-# IMIS Administrator system role (same constant used by payment_cycle seeding).
 IMIS_ADMINISTRATOR_SYSTEM = 64
 
 # Default TASAF programme / business areas seeded as TrainingCategory rows.
@@ -86,7 +85,6 @@ DEFAULT_CONFIG = {
     'seed_programme_areas': True,
 }
 
-# All right codes managed by this module (granted to the admin role on migrate).
 ALL_RIGHTS = [
     210101, 210102, 210103, 210104, 210110,
     210201, 210202, 210203, 210204,
@@ -182,13 +180,11 @@ def _seed_admin_rights(apps):
 
 
 def _seed_programme_areas(apps):
-    # Seed via the migration-state model, which lacks HistoryModel.save(); so the UUID
-    # PK and the (NOT NULL) audit FKs must be supplied explicitly.
     TrainingCategory = apps.get_model('training', 'TrainingCategory')
     User = apps.get_model('core', 'User')
     admin = User.objects.order_by('id').first()
     if not admin:
-        return  # no user yet (fresh bootstrap) — categories can be created later
+        return 
     for code, name in DEFAULT_PROGRAMME_AREAS:
         if not TrainingCategory.objects.filter(code=code).exists():
             TrainingCategory.objects.create(

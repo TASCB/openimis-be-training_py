@@ -118,7 +118,7 @@ def _checkin_open(session):
 
 
 def _passes_captcha(data):
-    # Placeholder — wire a provider (Turnstile/hCaptcha) here if required. For now
+    # Placeholder — to be wired (Turnstile/hCaptcha) here if required. For now
     # anti-bot relies on the honeypot + per-IP rate limit.
     return True
 

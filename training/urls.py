@@ -15,6 +15,5 @@ urlpatterns = [
     path('materials/<uuid:uuid>/download/', TrainingMaterialDownloadView.as_view()),
     path('evidence/upload/', TrainingEvidenceUploadView.as_view()),
     path('evidence/<uuid:uuid>/download/', TrainingEvidenceDownloadView.as_view()),
-    # PUBLIC (unauthenticated) self check-in — token = session.registration_token
     path('checkin/<str:token>/', TrainingCheckinView.as_view()),
 ]

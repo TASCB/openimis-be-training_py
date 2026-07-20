@@ -9,6 +9,7 @@ flow can later wrap (see docs/06-workflow-status.md).
 import logging
 from datetime import timedelta
 
+from django.db import transaction
 from django.db.models import Count
 from django.utils import timezone
 from django.utils.translation import gettext as _
@@ -22,6 +23,7 @@ from training.models import (
     Training, TrainingCategory, TrainerProfile,
     TrainingAssignment, TrainingParticipant, TrainingMaterial, TrainingEvidence,
     TrainingSession, TrainingStatus, TERMINAL_STATUSES, AssignmentStatus,
+    ActivityCodeSequence,
 )
 from training.validations import (
     TrainingValidation, TrainingCategoryValidation, TrainerProfileValidation,
@@ -30,6 +32,9 @@ from training.validations import (
 )
 
 logger = logging.getLogger(__name__)
+TRAINING_CODE_PREFIX = 'TRN'
+
+TRAINER_CODE_SEQUENCE = 'TRAINER'
 
 
 # ---------------------------------------------------------------------------
@@ -61,7 +66,9 @@ class TrainerProfileService(BaseService):
         super().__init__(user, validation_class)
 
     @register_service_signal('trainer_profile_service.create')
+    @transaction.atomic
     def create(self, obj_data):
+        self._assign_code(obj_data)
         return super().create(obj_data)
 
     @register_service_signal('trainer_profile_service.update')
@@ -71,6 +78,13 @@ class TrainerProfileService(BaseService):
     @register_service_signal('trainer_profile_service.delete')
     def delete(self, obj_data):
         return super().delete(obj_data)
+
+    @staticmethod
+    def _assign_code(obj_data):
+        sequence = ActivityCodeSequence.objects.select_for_update().get(prefix=TRAINER_CODE_SEQUENCE)
+        sequence.last_number += 1
+        sequence.save()
+        obj_data['code'] = f'{sequence.last_number:04}'
 
 
 class TrainingAssignmentService(BaseService):
@@ -193,12 +207,21 @@ class TrainingService(BaseService):
         super().__init__(user, validation_class)
 
     @register_service_signal('training_service.create')
+    @transaction.atomic
     def create(self, obj_data):
+        self._assign_code(obj_data)
         return super().create(obj_data)
 
     @register_service_signal('training_service.update')
     def update(self, obj_data):
         return super().update(obj_data)
+
+    @staticmethod
+    def _assign_code(obj_data):
+        sequence = ActivityCodeSequence.objects.select_for_update().get(prefix=TRAINING_CODE_PREFIX)
+        sequence.last_number += 1
+        sequence.save()
+        obj_data['code'] = f'{TRAINING_CODE_PREFIX}{sequence.last_number:06}'  # e.g. TRN000001 (max 999,999)
 
     @register_service_signal('training_service.delete')
     def delete(self, obj_data):
@@ -239,7 +262,7 @@ class TrainingService(BaseService):
 
 
 # ---------------------------------------------------------------------------
-# Conflict detection (see docs/05-conflict-detection.md)
+# Conflict detection
 # ---------------------------------------------------------------------------
 ACTIVE_ASSIGNMENT_STATUSES = (AssignmentStatus.ASSIGNED, AssignmentStatus.CONFIRMED)
 
@@ -339,7 +362,7 @@ class ConflictService:
 
 
 # ---------------------------------------------------------------------------
-# Dashboard summary (see docs/07-frontend.md)
+# Dashboard summary 
 # ---------------------------------------------------------------------------
 class TrainingSummaryService:
     def __init__(self, user):

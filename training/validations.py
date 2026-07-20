@@ -36,12 +36,22 @@ class TrainingValidation(_CodedValidation):
 
     @classmethod
     def validate_create(cls, user, **data):
-        super().validate_create(user, **data)
+        code = data.get('code', None)
+        if code:
+            cls.validate_empty_string(code)
+            cls.validate_unique_code_name(code)
         cls._validate_dates(data)
 
     @classmethod
     def validate_update(cls, user, **data):
-        super().validate_update(user, **data)
+        id_ = data.get('id', None)
+        cls.validate_object_exists(id_)
+        if 'code' in data:
+            existing = Training.objects.filter(id=id_).only('code').first()
+            if existing and data.get('code') != existing.code:
+                raise ValidationError(_("training.validation.code_immutable"))
+            if data.get('code'):
+                cls.validate_unique_code_name(data.get('code'), id_)
         cls._validate_dates(data)
 
     @staticmethod

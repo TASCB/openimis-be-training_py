@@ -169,6 +169,17 @@ class Training(HistoryModel):
         return f'{self.code} - {self.title}'
 
 
+class ActivityCodeSequence(UUIDModel):
+    prefix = models.CharField(max_length=16, unique=True)
+    last_number = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        db_table = 'tblTrainingActivityCodeSequence'
+
+    def __str__(self):
+        return f'{self.prefix}{self.last_number:08}'
+
+
 class TrainingSession(HistoryModel):
     """A session/day of a training. Owns its own QR self check-in token so
     attendance can be recorded per session (Day 1, Day 2, ...)."""
