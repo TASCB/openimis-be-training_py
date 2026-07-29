@@ -6,9 +6,12 @@ from django.utils import timezone
 
 from core.test_helpers import LogInHelper
 
-from training.models import Training, TrainerProfile, TrainingStatus, AssignmentStatus, AssignmentRole
+from training.models import (
+    Training, TrainerProfile, TrainingSession, TrainingStatus, AssignmentStatus, AssignmentRole,
+)
 from training.services import (
     TrainingService, TrainerProfileService, TrainingAssignmentService, ConflictService,
+    TrainingSessionService,
 )
 
 
@@ -33,7 +36,10 @@ class TrainingServiceTests(TestCase):
     def test_create_training(self):
         res = self.service.create(self._payload('T-CREATE'))
         self.assertTrue(res.get('success'), res.get('detail'))
-        self.assertEqual(Training.objects.filter(code='T-CREATE', is_deleted=False).count(), 1)
+        training = Training.objects.get(id=res['data']['id'])
+        self.assertEqual(training.title, 'Training T-CREATE')
+        # codes are server-assigned from the sequence, the payload code is ignored
+        self.assertTrue(training.code.startswith('TRN'))
 
     def test_soft_delete(self):
         res = self.service.create(self._payload('T-DEL'))
@@ -56,6 +62,103 @@ class TrainingServiceTests(TestCase):
         self.assertTrue(self.service.transition(tid, 'approve')['success'])
         self.assertTrue(self.service.transition(tid, 'schedule')['success'])
         self.assertEqual(Training.objects.get(id=tid).status, TrainingStatus.SCHEDULED)
+
+    def _scheduled(self, code, **over):
+        tid = self.service.create(self._payload(code, **over))['data']['id']
+        for action in ('submit', 'approve', 'schedule'):
+            self.service.transition(tid, action)
+        return tid
+
+    def test_reschedule_moves_window_and_logs(self):
+        tid = self._scheduled('T-RSC', venue='Room RSC')
+        new_start = self.start + timedelta(days=7)
+        new_end = new_start + timedelta(hours=3)
+        out = self.service.reschedule(tid, new_start, new_end, reason='Trainer unavailable')
+        self.assertTrue(out.get('success'), out.get('detail'))
+
+        training = Training.objects.get(id=tid)
+        self.assertEqual(training.status, TrainingStatus.SCHEDULED)
+        self.assertEqual(training.start_datetime, new_start)
+        self.assertEqual(training.end_datetime, new_end)
+        log = training.json_ext['reschedule_log']
+        self.assertEqual(len(log), 1)
+        self.assertEqual(log[0]['reason'], 'Trainer unavailable')
+        self.assertEqual(log[0]['by'], self.user.username)
+        self.assertEqual(log[0]['to_start'], new_start.isoformat())
+
+    def test_reschedule_rejected_from_draft(self):
+        tid = self.service.create(self._payload('T-RSC-DRAFT'))['data']['id']
+        out = self.service.reschedule(tid, self.start + timedelta(days=3),
+                                      self.start + timedelta(days=3, hours=2))
+        self.assertFalse(out.get('success'))
+        self.assertEqual(Training.objects.get(id=tid).start_datetime, self.start)
+
+    def test_reschedule_rejects_inverted_window(self):
+        tid = self._scheduled('T-RSC-BAD', venue='Room BAD')
+        out = self.service.reschedule(tid, self.end, self.start)
+        self.assertFalse(out.get('success'))
+
+    def test_reschedule_shifts_sessions_and_keeps_gaps(self):
+        tid = self._scheduled('T-RSC-SESS', venue='Room SESS',
+                              end_datetime=self.start + timedelta(days=4))
+        session_service = TrainingSessionService(self.user)
+        # Day 1 and Day 3 — a deliberate one-day gap that must survive the move.
+        for seq, offset in ((1, 0), (2, 2)):
+            session_service.create({
+                'training_id': tid, 'title': f'Day {seq}', 'sequence': seq,
+                'session_date': (self.start + timedelta(days=offset)).date(),
+                'registration_opens_at': self.start + timedelta(days=offset),
+            })
+        undated = session_service.create({
+            'training_id': tid, 'title': 'Unscheduled', 'sequence': 3})['data']['id']
+
+        new_start = self.start + timedelta(days=10)
+        out = self.service.reschedule(tid, new_start, new_start + timedelta(days=4))
+        self.assertTrue(out.get('success'), out.get('detail'))
+
+        dates = list(TrainingSession.objects
+                     .filter(training_id=tid, is_deleted=False, session_date__isnull=False)
+                     .order_by('sequence').values_list('session_date', flat=True))
+        self.assertEqual(dates, [new_start.date(), (new_start + timedelta(days=2)).date()])
+        # QR registration window travels with its session
+        opens = TrainingSession.objects.get(training_id=tid, sequence=1).registration_opens_at
+        self.assertEqual(opens.date(), new_start.date())
+        # undated session untouched
+        self.assertIsNone(TrainingSession.objects.get(id=undated).session_date)
+
+        entry = Training.objects.get(id=tid).json_ext['reschedule_log'][-1]
+        self.assertEqual(entry['sessions_shifted'], 2)
+        self.assertEqual(entry['sessions_outside_window'], 0)
+
+    def test_reschedule_flags_sessions_left_outside_shorter_window(self):
+        tid = self._scheduled('T-RSC-SHRINK', venue='Room SHRINK',
+                              end_datetime=self.start + timedelta(days=3))
+        session_service = TrainingSessionService(self.user)
+        for seq, offset in ((1, 0), (2, 3)):
+            session_service.create({
+                'training_id': tid, 'title': f'Day {seq}', 'sequence': seq,
+                'session_date': (self.start + timedelta(days=offset)).date(),
+            })
+
+        # same start, window shortened from 3 days to 1 — Day 2 no longer fits
+        out = self.service.reschedule(tid, self.start, self.start + timedelta(hours=4))
+        self.assertTrue(out.get('success'), out.get('detail'))
+        entry = Training.objects.get(id=tid).json_ext['reschedule_log'][-1]
+        self.assertEqual(entry['sessions_shifted'], 0)
+        self.assertEqual(entry['sessions_outside_window'], 1)
+
+    def test_reschedule_blocked_by_hard_conflict(self):
+        # an existing training occupies the venue in the target window
+        blocker_start = self.start + timedelta(days=14)
+        self.service.create(self._payload(
+            'T-RSC-BLOCKER', venue='Shared Hall',
+            start_datetime=blocker_start, end_datetime=blocker_start + timedelta(hours=3)))
+        tid = self._scheduled('T-RSC-MOVER', venue='Shared Hall')
+
+        out = self.service.reschedule(tid, blocker_start, blocker_start + timedelta(hours=2))
+        self.assertFalse(out.get('success'))
+        # window must be untouched after a blocked reschedule
+        self.assertEqual(Training.objects.get(id=tid).start_datetime, self.start)
 
     def test_trainer_conflict_detected(self):
         # trainer assigned to first training, overlapping second

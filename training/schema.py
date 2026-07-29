@@ -31,7 +31,7 @@ from training.gql_mutations import (
     CreateTrainingMutation, UpdateTrainingMutation, DeleteTrainingMutation,
     SubmitTrainingMutation, ApproveTrainingMutation, RejectTrainingMutation,
     ScheduleTrainingMutation, StartTrainingMutation, CompleteTrainingMutation,
-    CancelTrainingMutation, CloseTrainingMutation,
+    CancelTrainingMutation, CloseTrainingMutation, RescheduleTrainingMutation,
     CreateTrainingCategoryMutation, UpdateTrainingCategoryMutation, DeleteTrainingCategoryMutation,
     CreateTrainerProfileMutation, UpdateTrainerProfileMutation, DeleteTrainerProfileMutation,
     CreateTrainingAssignmentMutation, UpdateTrainingAssignmentMutation, DeleteTrainingAssignmentMutation,
@@ -218,6 +218,7 @@ class Mutation(graphene.ObjectType):
     complete_training = CompleteTrainingMutation.Field()
     cancel_training = CancelTrainingMutation.Field()
     close_training = CloseTrainingMutation.Field()
+    reschedule_training = RescheduleTrainingMutation.Field()
     # Category
     create_training_category = CreateTrainingCategoryMutation.Field()
     update_training_category = UpdateTrainingCategoryMutation.Field()

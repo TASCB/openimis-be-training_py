@@ -199,6 +199,9 @@ STATUS_TRANSITIONS = {
     'close': ((TrainingStatus.COMPLETED,), TrainingStatus.CLOSED),
 }
 
+# Rescheduling moves the date window without changing status — not a STATUS_TRANSITIONS entry.
+RESCHEDULE_FROM_STATUSES = (TrainingStatus.SCHEDULED,)
+
 
 class TrainingService(BaseService):
     OBJECT_TYPE = Training
@@ -259,6 +262,75 @@ class TrainingService(BaseService):
                     "data": model_representation(training)}
         except Exception as exc:
             return output_exception(model_name=self.OBJECT_TYPE.__name__, method="transition", exception=exc)
+
+    @register_service_signal('training_service.reschedule')
+    @transaction.atomic
+    def reschedule(self, training_id, start, end, reason=None):
+        """Move a scheduled training to a new window, keeping its status."""
+        try:
+            training = Training.objects.filter(id=training_id, is_deleted=False).first()
+            if not training:
+                return {"success": False, "message": _("training.validation.not_found"),
+                        "detail": str(training_id)}
+            if training.status not in RESCHEDULE_FROM_STATUSES:
+                return {"success": False,
+                        "message": _("training.validation.invalid_reschedule_status"),
+                        "detail": training.status}
+            if not start or not end or start >= end:
+                return {"success": False, "message": _("training.validation.invalid_window"),
+                        "detail": f"{start} -> {end}"}
+
+            was_start, was_end = training.start_datetime, training.end_datetime
+            training.start_datetime = start
+            training.end_datetime = end
+
+            hard = [c for c in ConflictService(self.user).check_for_training(training) if c['hard']]
+            if hard:
+                return {"success": False, "message": _("training.validation.hard_conflict"),
+                        "detail": " | ".join(c['message'] for c in hard)}
+
+            shifted, outside = self._shift_sessions(training, was_start)
+
+            log = list((training.json_ext or {}).get('reschedule_log') or [])
+            log.append({
+                'from_start': was_start.isoformat() if was_start else None,
+                'from_end': was_end.isoformat() if was_end else None,
+                'to_start': start.isoformat(),
+                'to_end': end.isoformat(),
+                'reason': reason or '',
+                'by': self.user.username,
+                'at': timezone.now().isoformat(),
+                'sessions_shifted': shifted,
+                'sessions_outside_window': outside,
+            })
+            training.json_ext = {**(training.json_ext or {}), 'reschedule_log': log}
+            training.save(username=self.user.username)
+            return {"success": True, "message": _("training.reschedule.success"),
+                    "data": model_representation(training)}
+        except Exception as exc:
+            return output_exception(model_name=self.OBJECT_TYPE.__name__, method="reschedule", exception=exc)
+
+    def _shift_sessions(self, training, was_start):
+        """Move dated sessions by the whole-day delta; sessions left outside the
+        new window are counted, not blocked. Returns ``(shifted, outside)``."""
+        days = (training.start_datetime.date() - was_start.date()).days if was_start else 0
+        delta = timedelta(days=days)
+        window = (training.start_datetime.date(), training.end_datetime.date())
+        shifted = outside = 0
+        for session in TrainingSession.objects.filter(training=training, is_deleted=False):
+            if not session.session_date:
+                continue
+            if days:
+                session.session_date += delta
+                if session.registration_opens_at:
+                    session.registration_opens_at += delta
+                if session.registration_closes_at:
+                    session.registration_closes_at += delta
+                session.save(username=self.user.username)
+                shifted += 1
+            if not window[0] <= session.session_date <= window[1]:
+                outside += 1
+        return shifted, outside
 
 
 # ---------------------------------------------------------------------------

@@ -286,6 +286,39 @@ class CloseTrainingMutation(_TransitionLogic, BaseMutation):
         pass
 
 
+class RescheduleTrainingInput(OpenIMISMutation.Input):
+    id = graphene.UUID(required=True)
+    start_datetime = graphene.DateTime(required=True)
+    end_datetime = graphene.DateTime(required=True)
+    reason = graphene.String(required=False)
+
+
+class RescheduleTrainingMutation(BaseMutation):
+    """Move a scheduled training to a new date window (status unchanged)."""
+    _mutation_module = "training"
+    _mutation_class = "RescheduleTrainingMutation"
+
+    @classmethod
+    def _validate_mutation(cls, user, **data):
+        if not user.has_perms(TrainingConfig.gql_training_update_perms):
+            raise PermissionDenied(_("unauthorized"))
+
+    @classmethod
+    def _mutate(cls, user, **data):
+        client_mutation_id = data.get('client_mutation_id')
+        _strip_client(data)
+        res = TrainingService(user).reschedule(
+            data.get('id'), data.get('start_datetime'), data.get('end_datetime'),
+            reason=data.get('reason'))
+        if res['success']:
+            _journal(TrainingMutation, 'training', user, client_mutation_id,
+                     Training.objects.filter(id=data['id']).first())
+        return res if not res['success'] else None
+
+    class Input(RescheduleTrainingInput):
+        pass
+
+
 # ===========================================================================
 # CRUD for the simpler entities — explicit  Helper keeps the bodies short.
 # ===========================================================================
