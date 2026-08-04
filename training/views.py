@@ -22,7 +22,7 @@ from training.models import (
     Training, TrainingMaterial, TrainingEvidence,
     TrainingSession, TrainingParticipant, AttendanceStatus, CheckInMethod, Gender,
 )
-from training.services import TrainingMaterialService, TrainingEvidenceService
+from training.services import TrainingMaterialService, TrainingEvidenceService, checkin_open
 
 logger = logging.getLogger(__name__)
 
@@ -98,23 +98,12 @@ class TrainingEvidenceDownloadView(_BaseDownloadView):
 
 
 # ── Public QR self check-in ──────────────────────────────────────────────────
-# The ONLY unauthenticated endpoint. Scoped by an opaque per-session token; closed
-# by default; anti-abuse = open/close window + (phone, session) de-dupe + per-IP
-# rate limit + honeypot. (A real captcha can be slotted into ``_passes_captcha``.)
+# The ONLY unauthenticated endpoint. Scoped by an opaque per-session token; open only while the
+# session runs (``services.checkin_open``); anti-abuse = that window + (phone, session) de-dupe +
+# per-IP rate limit + honeypot.
 def _session_for_token(token):
     return TrainingSession.objects.filter(
         registration_token=token, is_deleted=False).select_related('training').first()
-
-
-def _checkin_open(session):
-    if not session.registration_open:
-        return False
-    now = timezone.now()
-    if session.registration_opens_at and now < session.registration_opens_at:
-        return False
-    if session.registration_closes_at and now > session.registration_closes_at:
-        return False
-    return True
 
 
 def _passes_captcha(data):
@@ -143,14 +132,14 @@ class TrainingCheckinView(views.APIView):
                 'venue': session.venue,
             },
             'ref': (session.registration_token or '')[:4] + '·' + (session.registration_token or '')[-4:],
-            'isOpen': _checkin_open(session),
+            'isOpen': checkin_open(session),
         })
 
     def post(self, request, token):
         session = _session_for_token(token)
         if not session:
             return Response({'error': 'not_found'}, status=404)
-        if not _checkin_open(session):
+        if not checkin_open(session):
             return Response({'error': 'closed'}, status=403)
 
         ip = request.META.get('REMOTE_ADDR', 'anon')
