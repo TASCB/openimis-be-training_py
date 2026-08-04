@@ -35,6 +35,119 @@ DEFAULT_PROGRAMME_AREAS = [
     ('GENERAL_ADMIN', 'General Administration'),
 ]
 
+# Participant categories (requirement 6). Reconciled from three disagreeing lists in the
+# brief; `code` is structural and `sequence` orders the governance ladder.
+# See docs/REFERENCE_DATA.md §2.
+DEFAULT_PARTICIPANT_CATEGORIES = [
+    # (code, name, sequence)
+    ('TMU_HQ_STAFF', 'TMU Headquarters Staff', 10),
+    ('TMO', 'TASAF Monitoring Officer', 15),
+    ('MP', 'Member of Parliament', 20),
+    ('RC', 'Regional Commissioner', 30),
+    ('RS', 'Regional Secretary', 40),
+    ('REGIONAL_SECURITY_COMMITTEE', 'Regional Security Committee', 50),
+    ('DC', 'District Commissioner', 60),
+    ('DAS', 'District Assistant Secretary', 70),
+    ('DED', 'District Executive Director', 80),
+    ('CMT', 'Council Management Team', 90),
+    ('WARD_COUNCILLOR', 'Ward Councillor', 100),
+    ('PSSNC', 'Project Area Authority Coordinator', 110),
+    ('PSSNA', 'Project Area Authority Accountant', 120),
+    ('PAAF', 'Project Area Authority Facilitator', 130),
+    ('WEO', 'Ward Executive Officer', 140),
+    ('VEO', 'Village Executive Officer', 150),
+    ('VC', 'Village Chairperson', 160),
+    ('VILLAGE_COUNCIL_MEMBER', 'Village Council Member', 170),
+    ('MEO', 'Mtaa Executive Officer', 180),
+    ('MITAA_COMMITTEE_LEADER', 'Mitaa Committee Leader', 190),
+    ('SHEHA', 'Sheha', 200),
+    ('CMC', 'Community Management Committee', 210),
+    ('COMMUNITY_MEMBER', 'Community Member', 220),
+    ('OTHER', 'Other', 999),
+]
+
+# User groups and job titles, generated from the RBAC catalogue
+# docs/pssn/Roles/USER_GROUPS_AND_ROLES_GUIDELINE.md. A job title is not an openIMIS role.
+# See docs/REFERENCE_DATA.md §4.
+DEFAULT_STAFF_USER_GROUPS = [
+    # (code, name)
+    ('UG01', 'Executive Office and Corporate Governance'),
+    ('UG02', 'Internal Audit and Assurance'),
+    ('UG03', 'Finance, Disbursement and E Payment'),
+    ('UG04', 'Administration, Human Resources, Registry and Logistics'),
+    ('UG05', 'ICT, Systems and Digital Delivery'),
+    ('UG06', 'Programs, Productive Cash Transfer and Economic Inclusion'),
+    ('UG07', 'Climate Smart Public Works, Targeted Infrastructure, Safeguards and GRM'),
+    ('UG08', 'Monitoring, Evaluation and Data'),
+]
+
+DEFAULT_JOB_TITLES = [
+    # (sn, code, name, user_group_code)
+    (1, 'ASSISTANT_ADMINISTRATIVE_OFFICER', 'Assistant Administrative Officer', 'UG04'),
+    (2, 'ACCOUNTANT_DISBURSEMENTS', 'Accountant - Disbursements', 'UG03'),
+    (3, 'ACCOUNTANT_FINAL_ACCOUNTS', 'Accountant - Final Accounts', 'UG03'),
+    (4, 'ACCOUNTS_MANAGER', 'Accounts Manager', 'UG03'),
+    (5, 'ADMINISTRATIVE_OFFICER', 'Administrative Officer', 'UG04'),
+    (6, 'ASSISTANT_OFFICE_MANAGEMENT_SECRETARY', 'Assistant Office Management Secretary', 'UG01'),
+    (7, 'ASSISTANT_PROCUREMENT_OFFICER', 'Assistant Procurement Officer', 'UG01'),
+    (8, 'ASSISTANT_SUPPLIES_AND_INVENTORY_OFFICER', 'Assistant Supplies & Inventory Officer', 'UG01'),
+    (9, 'APPLICATION_SUPPORT_ASSISTANTS', 'Application Support Assistants', 'UG05'),
+    (10, 'APPLICATION_SUPPORT_OFFICER', 'Application Support Officer', 'UG05'),
+    (11, 'COORDINATION_AND_LOGISTICS_MANAGER', 'Coordination and Logistics Manager', 'UG01'),
+    (12, 'COORDINATION_LOGISTICS_OFFICER', 'Coordination Logistics Officer', 'UG01'),
+    (13, 'COMMUNICATION_MANAGER', 'Communication Manager', 'UG01'),
+    (14, 'COMMUNICATION_OFFICER', 'Communication Officer', 'UG01'),
+    (15, 'CLIMATE_SMART_PUBLIC_WORKS_MANAGER', 'Climate Smart Public Works Manager', 'UG07'),
+    (16, 'CLIMATE_SMART_PUBLIC_WORKS_OFFICER', 'Climate Smart Public Works Officer', 'UG07'),
+    (17, 'DATA_ANALYST_AND_ADMIN_OFFICER', 'Data Analyst and Admin Officer', 'UG05'),
+    (18, 'DIRECTOR_OF_FINANCE_AND_ADMINISTRATION', 'Director of Finance and Administration', 'UG03'),
+    (19, 'DIRECTOR_OF_INTERNAL_AUDIT', 'Director of Internal Audit', 'UG02'),
+    (20, 'DIRECTOR_OF_IT_AND_DELIVERY_SYSTEMS', 'Director of IT and Delivery Systems', 'UG05'),
+    (21, 'DISBURSEMENT_MANAGER', 'Disbursement Manager', 'UG03'),
+    (22, 'DIRECTOR_OF_PROGRAMS', 'Director of Programs', 'UG06'),
+    (23, 'EXECUTIVE_DIRECTOR', 'Executive Director', 'UG01'),
+    (24, 'ECONOMIC_INCLUSION_MANAGER', 'Economic Inclusion Manager', 'UG06'),
+    (25, 'ECONOMIC_INCLUSION_OFFICER', 'Economic Inclusion Officer', 'UG06'),
+    (26, 'E_PAYMENT_COORDINATOR', 'E-Payment Coordinator', 'UG03'),
+    (27, 'E_PAYMENT_OFFICER', 'E-Payment Officer', 'UG03'),
+    (28, 'ASSISTANT_GRIEVANCE_REDRESSAL', 'Assistant Grievance Redressal', 'UG07'),
+    (29, 'GRIEVANCE_REDRESSAL_OFFICER', 'Grievance Redressal Officer', 'UG07'),
+    (30, 'HUMAN_RESOURCE_MANAGER', 'Human Resource Manager', 'UG04'),
+    (31, 'INTERNAL_AUDITOR', 'Internal Auditor', 'UG02'),
+    (32, 'INTERNAL_AUDIT_MANAGER', 'Internal Audit Manager', 'UG02'),
+    (33, 'INFRASTRUCTURE_AND_SYSTEMS_ADMINISTRATION_OFFICER', 'Infrastructure and Systems Administration Officer', 'UG05'),
+    (34, 'ICT_TECHNICIAN', 'ICT Technician', 'UG05'),
+    (35, 'IT_MANAGER', 'IT - Manager', 'UG05'),
+    (36, 'LEGAL_OFFICER', 'Legal Officer', 'UG01'),
+    (37, 'MONITORING_AND_EVALUATION_MANAGER', 'Monitoring and Evaluation Manager', 'UG08'),
+    (38, 'MONITORING_AND_EVALUATION_OFFICER', 'Monitoring and Evaluation Officer', 'UG08'),
+    (39, 'MOTOR_VEHICLE_MECHANICS', 'Motor Vehicle Mechanics', 'UG04'),
+    (40, 'NETWORK_ADMINISTRATOR', 'Network Administrator', 'UG05'),
+    (41, 'OFFICE_ATTENDANT', 'Office Attendant', 'UG04'),
+    (42, 'OFFICE_MANAGEMENT_SECRETARY', 'Office Management Secretary', 'UG01'),
+    (43, 'PRODUCTIVE_CASH_TRANSFER_OFFICER', 'Productive Cash Transfer Officer', 'UG06'),
+    (44, 'PRODUCTIVE_CASH_TRANSFER_MANAGER', 'Productive Cash Transfer Manager', 'UG06'),
+    (45, 'PO_COMMUNITY_DEVELOPMENT', 'PO - Community Development', 'UG07'),
+    (46, 'PROJECT_OFFICER_CLIMATE_GENDER_AND_CROSS_CUTTING', 'Project Officer Climate, Gender and Cross Cutting', 'UG07'),
+    (47, 'PO_ENVIRONMENT', 'PO - Environment', 'UG07'),
+    (48, 'PROCUREMENT_MANAGER', 'Procurement Manager', 'UG01'),
+    (49, 'PROCUREMENT_OFFICER', 'Procurement Officer', 'UG01'),
+    (50, 'REGISTRY_ASSISTANT', 'Registry Assistant', 'UG04'),
+    (51, 'REGISTRY_ASSISTANT_CUM_SECRETARY', 'Registry Assistant CUM Secretary', 'UG01'),
+    (52, 'REGISTRY_OFFICER', 'Registry Officer', 'UG04'),
+    (53, 'SUPPLIES_AND_INVENTORY_OFFICER', 'Supplies & Inventory Officer', 'UG01'),
+    (54, 'SUPPORT_ASSISTANT', 'Support Assistant', 'UG05'),
+    (55, 'SENIOR_APPLICATION_SUPPORT_OFFICER', 'Senior Application Support Officer', 'UG05'),
+    (56, 'SYSTEM_DEVELOPMENT_OFFICER', 'System Development Officer', 'UG05'),
+    (57, 'SENIOR_LEGAL_OFFICER', 'Senior Legal Officer', 'UG01'),
+    (58, 'SAFEGUARD_MANAGER', 'Safeguard Manager', 'UG07'),
+    (59, 'SENIOR_SYSTEM_DEVELOPMENT_OFFICER', 'Senior System Development Officer', 'UG05'),
+    (60, 'TARGETED_INFRASTRUCTURE_OFFICER', 'Targeted Infrastructure Officer', 'UG07'),
+    (61, 'TARGETED_INFRASTRUCTURE_SECRETARY', 'Targeted Infrastructure Secretary', 'UG07'),
+    (62, 'TASAF_MONITORING_OFFICER', 'TASAF Monitoring Officer', 'UG08'),
+    (63, 'TRANSPORT_OFFICER', 'Transport Officer', 'UG04'),
+]
+
 DEFAULT_CONFIG = {
     # --- Training ---
     'gql_training_search_perms': ['210101'],
@@ -77,12 +190,32 @@ DEFAULT_CONFIG = {
     'gql_session_create_perms': ['210902'],
     'gql_session_update_perms': ['210903'],
     'gql_session_delete_perms': ['210904'],
+    # --- Participant category (2110xx) ---
+    'gql_participant_category_search_perms': ['211001'],
+    'gql_participant_category_create_perms': ['211002'],
+    'gql_participant_category_update_perms': ['211003'],
+    'gql_participant_category_delete_perms': ['211004'],
+    # --- Job title / user group (2111xx, 2112xx) ---
+    'gql_job_title_search_perms': ['211101'],
+    'gql_job_title_create_perms': ['211102'],
+    'gql_job_title_update_perms': ['211103'],
+    'gql_job_title_delete_perms': ['211104'],
+    'gql_staff_user_group_search_perms': ['211201'],
+    # --- Reports (2113xx) ---
+    'gql_training_report_perms': ['211301'],
+    # --- QR self check-in window (docs/QR_SESSION_ATTENDANCE.md §4.1) ---
+    'checkin_auto_open_on_session_date': True,
+    'checkin_timezone': 'Africa/Dar_es_Salaam',  # session_date/start_time are wall-clock here
+    'checkin_open_minutes_before': 60,
+    'checkin_open_minutes_after': 120,
     # --- Conflict detection (configurable) ---
     'conflict_check_enabled': True,
     'conflict_hard_types': ['TRAINER', 'VENUE', 'STAFF'],
     'conflict_soft_types': ['LOCATION'],
     # --- Seeding ---
     'seed_programme_areas': True,
+    'seed_participant_categories': True,
+    'seed_job_titles': True,
 }
 
 ALL_RIGHTS = [
@@ -95,6 +228,10 @@ ALL_RIGHTS = [
     210701, 210702, 210703, 210704,
     210801, 210802, 210804,
     210901, 210902, 210903, 210904,
+    211001, 211002, 211003, 211004,
+    211101, 211102, 211103, 211104,
+    211201,
+    211301,
 ]
 
 
@@ -135,11 +272,27 @@ class TrainingConfig(AppConfig):
     gql_session_create_perms = []
     gql_session_update_perms = []
     gql_session_delete_perms = []
+    gql_participant_category_search_perms = []
+    gql_participant_category_create_perms = []
+    gql_participant_category_update_perms = []
+    gql_participant_category_delete_perms = []
+    gql_job_title_search_perms = []
+    gql_job_title_create_perms = []
+    gql_job_title_update_perms = []
+    gql_job_title_delete_perms = []
+    gql_staff_user_group_search_perms = []
+    gql_training_report_perms = []
     # behaviour
+    checkin_auto_open_on_session_date = True
+    checkin_timezone = 'Africa/Dar_es_Salaam'
+    checkin_open_minutes_before = 60
+    checkin_open_minutes_after = 120
     conflict_check_enabled = True
     conflict_hard_types = []
     conflict_soft_types = []
     seed_programme_areas = True
+    seed_participant_categories = True
+    seed_job_titles = True
 
     def ready(self):
         from core.models import ModuleConfiguration
@@ -166,6 +319,16 @@ def on_post_migrate(sender, **kwargs):
             _seed_programme_areas(apps)
     except Exception as exc:
         logger.warning("training: programme-area seeding skipped (%s)", exc)
+    try:
+        if TrainingConfig.seed_participant_categories:
+            _seed_participant_categories(apps)
+    except Exception as exc:
+        logger.warning("training: participant-category seeding skipped (%s)", exc)
+    try:
+        if TrainingConfig.seed_job_titles:
+            _seed_job_titles(apps)
+    except Exception as exc:
+        logger.warning("training: job-title seeding skipped (%s)", exc)
 
 
 def _seed_admin_rights(apps):
@@ -191,3 +354,42 @@ def _seed_programme_areas(apps):
                 id=uuid.uuid4(), code=code, name=name, is_active=True, version=1,
                 user_created_id=admin.id, user_updated_id=admin.id,
             )
+
+
+def _seed_participant_categories(apps):
+    """Idempotent by code; existing rows are never overwritten."""
+    ParticipantCategory = apps.get_model('training', 'ParticipantCategory')
+    User = apps.get_model('core', 'User')
+    admin = User.objects.order_by('id').first()
+    if not admin:
+        return
+    for code, name, sequence in DEFAULT_PARTICIPANT_CATEGORIES:
+        if not ParticipantCategory.objects.filter(code=code).exists():
+            ParticipantCategory.objects.create(
+                id=uuid.uuid4(), code=code, name=name, sequence=sequence,
+                is_active=True, version=1,
+                user_created_id=admin.id, user_updated_id=admin.id,
+            )
+
+
+def _seed_job_titles(apps):
+    """Seed the eight user groups and the 63 job titles, idempotent by code."""
+    StaffUserGroup = apps.get_model('training', 'StaffUserGroup')
+    JobTitle = apps.get_model('training', 'JobTitle')
+    User = apps.get_model('core', 'User')
+    admin = User.objects.order_by('id').first()
+    if not admin:
+        return
+
+    audit = {'version': 1, 'user_created_id': admin.id, 'user_updated_id': admin.id}
+    for code, name in DEFAULT_STAFF_USER_GROUPS:
+        if not StaffUserGroup.objects.filter(code=code).exists():
+            StaffUserGroup.objects.create(
+                id=uuid.uuid4(), code=code, name=name, is_active=True, **audit)
+
+    groups = dict(StaffUserGroup.objects.values_list('code', 'id'))
+    for sn, code, name, group_code in DEFAULT_JOB_TITLES:
+        if not JobTitle.objects.filter(code=code).exists():
+            JobTitle.objects.create(
+                id=uuid.uuid4(), sn=sn, code=code, name=name,
+                user_group_id=groups.get(group_code), is_active=True, **audit)

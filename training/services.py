@@ -7,7 +7,8 @@ Per-entity CRUD services extend ``core.services.BaseService`` (uniform
 flow can later wrap (see docs/06-workflow-status.md).
 """
 import logging
-from datetime import timedelta
+from datetime import datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
 from django.db import transaction
 from django.db.models import Count
@@ -17,18 +18,20 @@ from django.utils.translation import gettext as _
 from core.services import BaseService
 from core.services.utils import output_exception, model_representation, check_authentication
 from core.signals import register_service_signal
+from location.models import Location
 
 from training.apps import TrainingConfig
 from training.models import (
     Training, TrainingCategory, TrainerProfile,
     TrainingAssignment, TrainingParticipant, TrainingMaterial, TrainingEvidence,
     TrainingSession, TrainingStatus, TERMINAL_STATUSES, AssignmentStatus,
-    ActivityCodeSequence,
+    ActivityCodeSequence, ParticipantCategory, JobTitle,
 )
 from training.validations import (
     TrainingValidation, TrainingCategoryValidation, TrainerProfileValidation,
     TrainingAssignmentValidation, TrainingParticipantValidation,
     TrainingMaterialValidation, TrainingEvidenceValidation, TrainingSessionValidation,
+    ParticipantCategoryValidation, JobTitleValidation,
 )
 
 logger = logging.getLogger(__name__)
@@ -40,7 +43,35 @@ TRAINER_CODE_SEQUENCE = 'TRAINER'
 # ---------------------------------------------------------------------------
 # CRUD services
 # ---------------------------------------------------------------------------
-class TrainingCategoryService(BaseService):
+class _FalsyDefaultFixMixin:
+    """Work around core's pre_save validator dropping falsy values.
+
+    ``core.validation.base.validator`` runs on every HistoryModel save and resets any
+    field that declares a model default back to that default when the incoming value is
+    FALSY — it tests ``not attr`` rather than ``attr is None``. So ``is_active=False``
+    never survives a save on any model whose field is ``BooleanField(default=True)``:
+    deactivating a category, a programme area or a trainer silently did nothing.
+
+    Core is an installed dependency, so the fix is applied here: let the normal save run
+    (it writes the history row and bumps the version), then re-apply the falsy flags with
+    a queryset update, which does not fire pre_save. The historical row therefore records
+    the pre-reset value; the live row is correct, which is what reads and reports use.
+    """
+
+    FALSY_DEFAULT_FIELDS = ('is_active',)
+
+    def _reapply_falsy_defaults(self, obj_data, result):
+        overrides = {name: False for name in self.FALSY_DEFAULT_FIELDS
+                     if obj_data.get(name) is False}
+        if not overrides or not result.get('success') or not obj_data.get('id'):
+            return result
+        self.OBJECT_TYPE.objects.filter(id=obj_data['id']).update(**overrides)
+        if isinstance(result.get('data'), dict):
+            result['data'].update(overrides)
+        return result
+
+
+class TrainingCategoryService(_FalsyDefaultFixMixin, BaseService):
     OBJECT_TYPE = TrainingCategory
 
     def __init__(self, user, validation_class=TrainingCategoryValidation):
@@ -52,14 +83,52 @@ class TrainingCategoryService(BaseService):
 
     @register_service_signal('training_category_service.update')
     def update(self, obj_data):
-        return super().update(obj_data)
+        return self._reapply_falsy_defaults(obj_data, super().update(obj_data))
 
     @register_service_signal('training_category_service.delete')
     def delete(self, obj_data):
         return super().delete(obj_data)
 
 
-class TrainerProfileService(BaseService):
+class ParticipantCategoryService(_FalsyDefaultFixMixin, BaseService):
+    OBJECT_TYPE = ParticipantCategory
+
+    def __init__(self, user, validation_class=ParticipantCategoryValidation):
+        super().__init__(user, validation_class)
+
+    @register_service_signal('participant_category_service.create')
+    def create(self, obj_data):
+        return super().create(obj_data)
+
+    @register_service_signal('participant_category_service.update')
+    def update(self, obj_data):
+        return self._reapply_falsy_defaults(obj_data, super().update(obj_data))
+
+    @register_service_signal('participant_category_service.delete')
+    def delete(self, obj_data):
+        return super().delete(obj_data)
+
+
+class JobTitleService(_FalsyDefaultFixMixin, BaseService):
+    OBJECT_TYPE = JobTitle
+
+    def __init__(self, user, validation_class=JobTitleValidation):
+        super().__init__(user, validation_class)
+
+    @register_service_signal('job_title_service.create')
+    def create(self, obj_data):
+        return super().create(obj_data)
+
+    @register_service_signal('job_title_service.update')
+    def update(self, obj_data):
+        return self._reapply_falsy_defaults(obj_data, super().update(obj_data))
+
+    @register_service_signal('job_title_service.delete')
+    def delete(self, obj_data):
+        return super().delete(obj_data)
+
+
+class TrainerProfileService(_FalsyDefaultFixMixin, BaseService):
     OBJECT_TYPE = TrainerProfile
 
     def __init__(self, user, validation_class=TrainerProfileValidation):
@@ -73,7 +142,7 @@ class TrainerProfileService(BaseService):
 
     @register_service_signal('trainer_profile_service.update')
     def update(self, obj_data):
-        return super().update(obj_data)
+        return self._reapply_falsy_defaults(obj_data, super().update(obj_data))
 
     @register_service_signal('trainer_profile_service.delete')
     def delete(self, obj_data):
@@ -144,6 +213,36 @@ class TrainingSessionService(BaseService):
         return super().delete(obj_data)
 
 
+def _local_now():
+    # Session times are wall-clock; the server clock is UTC (USE_TZ=False). See docs/QR_SESSION_ATTENDANCE.md §4.1.
+    try:
+        return datetime.now(ZoneInfo(TrainingConfig.checkin_timezone)).replace(tzinfo=None)
+    except Exception:
+        return timezone.now()
+
+
+def _auto_open_today(session):
+    if not TrainingConfig.checkin_auto_open_on_session_date or not session.session_date:
+        return False
+    if session.registration_opens_at or session.registration_closes_at:
+        return False  # explicit window = the officer drives this session by hand
+    starts = datetime.combine(session.session_date, session.start_time or time.min) \
+        - timedelta(minutes=TrainingConfig.checkin_open_minutes_before)
+    ends = datetime.combine(session.session_date, session.end_time or time.max) \
+        + timedelta(minutes=TrainingConfig.checkin_open_minutes_after)
+    return starts <= _local_now() <= ends
+
+
+def checkin_open(session):
+    """Whether public QR self check-in accepts submissions — docs/QR_SESSION_ATTENDANCE.md §4.1."""
+    now = timezone.now()
+    if session.registration_opens_at and now < session.registration_opens_at:
+        return False
+    if session.registration_closes_at and now > session.registration_closes_at:
+        return False
+    return bool(session.registration_open) or _auto_open_today(session)
+
+
 class TrainingMaterialService(BaseService):
     OBJECT_TYPE = TrainingMaterial
 
@@ -203,6 +302,29 @@ STATUS_TRANSITIONS = {
 RESCHEDULE_FROM_STATUSES = (TrainingStatus.SCHEDULED,)
 
 
+def _paa_scope(location):
+    # Owned by api_etl so a training and an ETL import cannot disagree; absent = mainland behaviour.
+    try:
+        from api_etl.paa_aliases import get_paa_scope
+    except Exception:
+        return None
+    return get_paa_scope(name=location.name, code=location.code)
+
+
+def resolve_paa_reference(location):
+    """The PAA a location belongs to — docs/PAA_LOCATION.md."""
+    district = None
+    node = location
+    while node is not None:
+        scope = _paa_scope(node)
+        if scope:
+            return scope
+        if district is None and node.type == 'D':
+            district = node
+        node = node.parent
+    return district.name if district else None
+
+
 class TrainingService(BaseService):
     OBJECT_TYPE = Training
 
@@ -213,11 +335,21 @@ class TrainingService(BaseService):
     @transaction.atomic
     def create(self, obj_data):
         self._assign_code(obj_data)
+        self._assign_paa_reference(obj_data)
         return super().create(obj_data)
 
     @register_service_signal('training_service.update')
     def update(self, obj_data):
+        self._assign_paa_reference(obj_data)
         return super().update(obj_data)
+
+    @staticmethod
+    def _assign_paa_reference(obj_data):
+        """PAA is derived from the chosen location, never typed."""
+        if 'location_id' not in obj_data:
+            return  # partial update leaving the location alone
+        location = Location.objects.filter(id=obj_data.get('location_id')).first()
+        obj_data['paa_reference'] = resolve_paa_reference(location)
 
     @staticmethod
     def _assign_code(obj_data):
@@ -421,9 +553,13 @@ class ConflictService:
 
     @staticmethod
     def _fmt_window(training):
+        # localtime() raises on naive datetimes, and USE_TZ=False makes every one of these naive.
+        def local(value):
+            return timezone.localtime(value) if timezone.is_aware(value) else value
+
         try:
-            s = timezone.localtime(training.start_datetime)
-            e = timezone.localtime(training.end_datetime)
+            s = local(training.start_datetime)
+            e = local(training.end_datetime)
             if s.date() == e.date():
                 return _("from %(s)s to %(e)s on %(d)s") % {
                     's': s.strftime('%H:%M'), 'e': e.strftime('%H:%M'), 'd': s.strftime('%Y-%m-%d')}

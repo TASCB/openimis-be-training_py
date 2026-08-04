@@ -8,7 +8,7 @@ from core.validation.stringFieldValidationMixin import StringFieldValidationMixi
 from training.models import (
     Training, TrainingCategory, TrainerProfile,
     TrainingAssignment, TrainingParticipant, TrainingMaterial, TrainingEvidence,
-    TrainingSession,
+    TrainingSession, ParticipantCategory, JobTitle, StaffUserGroup,
 )
 
 
@@ -64,6 +64,18 @@ class TrainingValidation(_CodedValidation):
 
 class TrainingCategoryValidation(_CodedValidation):
     OBJECT_TYPE = TrainingCategory
+
+
+class ParticipantCategoryValidation(_CodedValidation):
+    OBJECT_TYPE = ParticipantCategory
+
+
+class JobTitleValidation(_CodedValidation):
+    OBJECT_TYPE = JobTitle
+
+
+class StaffUserGroupValidation(_CodedValidation):
+    OBJECT_TYPE = StaffUserGroup
 
 
 class TrainerProfileValidation(_CodedValidation):

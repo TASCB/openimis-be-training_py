@@ -52,18 +52,6 @@ class AssignmentStatus(models.TextChoices):
     CANCELLED = 'CANCELLED', _('Cancelled')
 
 
-class ParticipantType(models.TextChoices):
-    TASAF_STAFF = 'TASAF_STAFF', _('TASAF Staff')
-    PAA_REP = 'PAA_REP', _('PAA Representative')
-    CMC_MEMBER = 'CMC_MEMBER', _('CMC Member')
-    LGA_OFFICER = 'LGA_OFFICER', _('LGA Officer')
-    ENUMERATOR = 'ENUMERATOR', _('Enumerator')
-    SUPERVISOR = 'SUPERVISOR', _('Supervisor')
-    COMMUNITY_FACILITATOR = 'COMMUNITY_FACILITATOR', _('Community Facilitator')
-    TRAINER = 'TRAINER', _('Trainer')
-    OTHER = 'OTHER', _('Other')
-
-
 class AttendanceStatus(models.TextChoices):
     INVITED = 'INVITED', _('Invited')
     CONFIRMED = 'CONFIRMED', _('Confirmed')
@@ -85,7 +73,6 @@ class EvidenceType(models.TextChoices):
 class Gender(models.TextChoices):
     MALE = 'M', _('Male')
     FEMALE = 'F', _('Female')
-    OTHER = 'O', _('Other')
 
 
 class CheckInMethod(models.TextChoices):
@@ -107,10 +94,75 @@ class TrainingCategory(HistoryModel):
         return f'{self.code} - {self.name}'
 
 
+class ParticipantCategory(HistoryModel):
+    """Who attends a training — the configurable governance ladder.
+
+    Replaces the ``ParticipantType`` enum. See docs/REFERENCE_DATA.md §2.
+    """
+    code = models.CharField(max_length=255, blank=False, null=False)
+    name = models.CharField(max_length=255, blank=False, null=False)
+    description = models.TextField(blank=True, null=True)
+    sequence = models.IntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['code']),
+            models.Index(fields=['is_active']),
+            models.Index(fields=['sequence']),
+        ]
+
+    def __str__(self):
+        return f'{self.code} - {self.name}'
+
+
+class StaffUserGroup(HistoryModel):
+    """One of the eight TASAF user groups (UG01-UG08). See docs/REFERENCE_DATA.md §4."""
+    code = models.CharField(max_length=10, blank=False, null=False)
+    name = models.CharField(max_length=255, blank=False, null=False)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        indexes = [models.Index(fields=['code']), models.Index(fields=['is_active'])]
+
+    def __str__(self):
+        return f'{self.code} - {self.name}'
+
+
+class JobTitle(HistoryModel):
+    """A substantive TASAF job title, from the RBAC catalogue's 63.
+
+    Not an openIMIS role — see docs/REFERENCE_DATA.md §4. ``sn`` is the catalogue's
+    official title-reference number, not a hierarchy rank.
+    """
+    sn = models.IntegerField(default=0)
+    code = models.CharField(max_length=255, blank=False, null=False)
+    name = models.CharField(max_length=255, blank=False, null=False)
+    user_group = models.ForeignKey(
+        StaffUserGroup, on_delete=models.DO_NOTHING, blank=True, null=True,
+        related_name='job_titles')
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['code']),
+            models.Index(fields=['sn']),
+            models.Index(fields=['user_group']),
+            models.Index(fields=['is_active']),
+        ]
+
+    def __str__(self):
+        return self.name
+
+
 class TrainerProfile(HistoryModel):
     """Reusable trainer profile (internal staff or external)."""
     code = models.CharField(max_length=255, blank=False, null=False)
     full_name = models.CharField(max_length=255, blank=False, null=False)
+    gender = models.CharField(max_length=10, choices=Gender.choices, blank=True, null=True)
+    position = models.ForeignKey(
+        JobTitle, on_delete=models.DO_NOTHING, blank=True, null=True,
+        related_name='trainers')
     email = models.CharField(max_length=255, blank=True, null=True)
     phone = models.CharField(max_length=50, blank=True, null=True)
     organization = models.CharField(max_length=255, blank=True, null=True)
@@ -126,6 +178,7 @@ class TrainerProfile(HistoryModel):
     class Meta:
         indexes = [
             models.Index(fields=['code']),
+            models.Index(fields=['gender']),
             models.Index(fields=['trainer_type']),
             models.Index(fields=['is_active']),
         ]
@@ -255,8 +308,9 @@ class TrainingParticipant(HistoryModel):
     email = models.CharField(max_length=255, blank=True, null=True)
     organization = models.CharField(max_length=255, blank=True, null=True)
     title = models.CharField(max_length=255, blank=True, null=True)
-    participant_type = models.CharField(
-        max_length=30, choices=ParticipantType.choices, default=ParticipantType.OTHER)
+    category = models.ForeignKey(
+        ParticipantCategory, on_delete=models.DO_NOTHING, blank=True, null=True,
+        related_name='participants')
     internal_user = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.DO_NOTHING, blank=True, null=True,
         related_name='training_participations')
@@ -275,7 +329,8 @@ class TrainingParticipant(HistoryModel):
         indexes = [
             models.Index(fields=['training']),
             models.Index(fields=['session']),
-            models.Index(fields=['participant_type']),
+            models.Index(fields=['gender']),
+            models.Index(fields=['category']),
             models.Index(fields=['attendance_status']),
             models.Index(fields=['self_registered']),
         ]
@@ -326,6 +381,21 @@ class TrainingMutation(UUIDModel, ObjectMutation):
 class TrainingCategoryMutation(UUIDModel, ObjectMutation):
     training_category = models.ForeignKey(TrainingCategory, models.DO_NOTHING, related_name='mutations')
     mutation = models.ForeignKey(MutationLog, models.DO_NOTHING, related_name='training_categories')
+
+
+class StaffUserGroupMutation(UUIDModel, ObjectMutation):
+    staff_user_group = models.ForeignKey(StaffUserGroup, models.DO_NOTHING, related_name='mutations')
+    mutation = models.ForeignKey(MutationLog, models.DO_NOTHING, related_name='staff_user_groups')
+
+
+class JobTitleMutation(UUIDModel, ObjectMutation):
+    job_title = models.ForeignKey(JobTitle, models.DO_NOTHING, related_name='mutations')
+    mutation = models.ForeignKey(MutationLog, models.DO_NOTHING, related_name='job_titles')
+
+
+class ParticipantCategoryMutation(UUIDModel, ObjectMutation):
+    participant_category = models.ForeignKey(ParticipantCategory, models.DO_NOTHING, related_name='mutations')
+    mutation = models.ForeignKey(MutationLog, models.DO_NOTHING, related_name='participant_categories')
 
 
 class TrainerProfileMutation(UUIDModel, ObjectMutation):
