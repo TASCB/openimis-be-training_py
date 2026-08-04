@@ -1,17 +1,18 @@
 """Unit tests for Training services: CRUD, conflict detection, status workflow."""
-from datetime import timedelta
+from datetime import datetime, time, timedelta
+from types import SimpleNamespace
 
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 from django.utils import timezone
 
 from core.test_helpers import LogInHelper
 
 from training.models import (
-    Training, TrainerProfile, TrainingSession, TrainingStatus, AssignmentStatus, AssignmentRole,
+    Training, TrainingSession, TrainingStatus, AssignmentStatus, AssignmentRole,
 )
 from training.services import (
     TrainingService, TrainerProfileService, TrainingAssignmentService, ConflictService,
-    TrainingSessionService,
+    TrainingSessionService, checkin_open, _local_now, resolve_paa_reference,
 )
 
 
@@ -183,3 +184,78 @@ class TrainingServiceTests(TestCase):
         venue_conflicts = [c for c in conflicts if c['type'] == 'VENUE']
         self.assertTrue(venue_conflicts)
         self.assertTrue(venue_conflicts[0]['hard'])
+
+
+class CheckinOpenTests(SimpleTestCase):
+    """``checkin_open`` is pure attribute logic — no DB needed."""
+
+    def _session(self, **over):
+        data = {
+            'registration_open': False, 'registration_opens_at': None,
+            'registration_closes_at': None, 'session_date': None,
+            'start_time': None, 'end_time': None,
+        }
+        data.update(over)
+        return SimpleNamespace(**data)
+
+    def test_switch_opens_regardless_of_date(self):
+        self.assertTrue(checkin_open(self._session(registration_open=True)))
+
+    def test_undated_session_stays_closed(self):
+        self.assertFalse(checkin_open(self._session()))
+
+    def test_auto_opens_on_the_session_day(self):
+        today = _local_now().date()
+        self.assertTrue(checkin_open(self._session(session_date=today)))
+        self.assertFalse(checkin_open(self._session(session_date=today - timedelta(days=1))))
+        self.assertFalse(checkin_open(self._session(session_date=today + timedelta(days=1))))
+
+    def test_auto_open_respects_session_times_and_grace(self):
+        now = _local_now()
+        long_over = self._session(session_date=now.date(), start_time=time(0, 1),
+                                  end_time=(now - timedelta(hours=5)).time())
+        just_over = self._session(session_date=now.date(), start_time=time(0, 1),
+                                  end_time=(now - timedelta(minutes=30)).time())
+        self.assertFalse(checkin_open(long_over))
+        self.assertTrue(checkin_open(just_over))  # within checkin_open_minutes_after
+
+    def test_explicit_window_disables_the_fallback_and_force_closes(self):
+        past = datetime.now() - timedelta(days=1)
+        today = _local_now().date()
+        self.assertFalse(checkin_open(self._session(session_date=today, registration_closes_at=past)))
+        self.assertFalse(checkin_open(self._session(
+            session_date=today, registration_open=True, registration_closes_at=past)))
+
+
+class ResolvePaaReferenceTests(SimpleTestCase):
+    """PAA = the district, except Zanzibar (api_etl's UNGUJA/PEMBA scopes)."""
+
+    def _loc(self, type_, code, name, parent=None):
+        return SimpleNamespace(type=type_, code=code, name=name, parent=parent)
+
+    def test_mainland_district_is_its_own_paa(self):
+        district = self._loc('D', '2205', 'Ludewa', self._loc('R', '22', 'Njombe'))
+        self.assertEqual(resolve_paa_reference(district), 'Ludewa')
+
+    def test_zanzibar_districts_roll_up_to_island_scope(self):
+        pemba = self._loc('D', '5402', 'Micheweni', self._loc('R', '54', 'Kaskazini Pemba'))
+        unguja = self._loc('D', '5101', 'Kaskazini A', self._loc('R', '51', 'Kaskazini Unguja'))
+        self.assertEqual(resolve_paa_reference(pemba), 'PEMBA')
+        self.assertEqual(resolve_paa_reference(unguja), 'UNGUJA')
+
+    def test_ward_and_village_resolve_through_their_district(self):
+        district = self._loc('D', '5402', 'Micheweni', self._loc('R', '54', 'Kaskazini Pemba'))
+        ward = self._loc('W', '540201', 'Konde', district)
+        village = self._loc('V', '54020101', 'Kinyasini', ward)
+        self.assertEqual(resolve_paa_reference(ward), 'PEMBA')
+        self.assertEqual(resolve_paa_reference(village), 'PEMBA')
+
+    def test_region_only_has_no_paa(self):
+        self.assertIsNone(resolve_paa_reference(self._loc('R', '22', 'Njombe')))
+        self.assertIsNone(resolve_paa_reference(None))
+
+    def test_zanzibar_region_alone_already_names_the_paa(self):
+        # A Zanzibar region determines the island scope before a district is picked, which is what
+        # lets the form show "PEMBA" as soon as the region is chosen.
+        self.assertEqual(resolve_paa_reference(self._loc('R', '54', 'Kaskazini Pemba')), 'PEMBA')
+        self.assertEqual(resolve_paa_reference(self._loc('R', '51', 'Kaskazini Unguja')), 'UNGUJA')
