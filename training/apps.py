@@ -37,7 +37,6 @@ DEFAULT_PROGRAMME_AREAS = [
 
 # Participant categories (requirement 6). Reconciled from three disagreeing lists in the
 # brief; `code` is structural and `sequence` orders the governance ladder.
-# See docs/REFERENCE_DATA.md §2.
 DEFAULT_PARTICIPANT_CATEGORIES = [
     # (code, name, sequence)
     ('TMU_HQ_STAFF', 'TMU Headquarters Staff', 10),
@@ -66,9 +65,9 @@ DEFAULT_PARTICIPANT_CATEGORIES = [
     ('OTHER', 'Other', 999),
 ]
 
-# User groups and job titles, generated from the RBAC catalogue
-# docs/pssn/Roles/USER_GROUPS_AND_ROLES_GUIDELINE.md. A job title is not an openIMIS role.
-# See docs/REFERENCE_DATA.md §4.
+# User groups and job titles, generated from the TASAF RBAC catalogue. A job title is not
+# an openIMIS role: roles are permission bundles shared across titles, so a title cannot
+# be derived from a user's roles.
 DEFAULT_STAFF_USER_GROUPS = [
     # (code, name)
     ('UG01', 'Executive Office and Corporate Governance'),

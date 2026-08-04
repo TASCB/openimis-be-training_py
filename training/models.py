@@ -97,7 +97,7 @@ class TrainingCategory(HistoryModel):
 class ParticipantCategory(HistoryModel):
     """Who attends a training — the configurable governance ladder.
 
-    Replaces the ``ParticipantType`` enum. See docs/REFERENCE_DATA.md §2.
+    Replaces the ``ParticipantType`` enum.
     """
     code = models.CharField(max_length=255, blank=False, null=False)
     name = models.CharField(max_length=255, blank=False, null=False)
@@ -117,7 +117,7 @@ class ParticipantCategory(HistoryModel):
 
 
 class StaffUserGroup(HistoryModel):
-    """One of the eight TASAF user groups (UG01-UG08). See docs/REFERENCE_DATA.md §4."""
+    """One of the eight TASAF user groups (UG01-UG08), from the RBAC catalogue."""
     code = models.CharField(max_length=10, blank=False, null=False)
     name = models.CharField(max_length=255, blank=False, null=False)
     is_active = models.BooleanField(default=True)
@@ -132,8 +132,9 @@ class StaffUserGroup(HistoryModel):
 class JobTitle(HistoryModel):
     """A substantive TASAF job title, from the RBAC catalogue's 63.
 
-    Not an openIMIS role — see docs/REFERENCE_DATA.md §4. ``sn`` is the catalogue's
-    official title-reference number, not a hierarchy rank.
+    Not an openIMIS role: roles are permission bundles shared across titles, so a title
+    cannot be derived from a user's roles. ``sn`` is the catalogue's official
+    title-reference number, not a hierarchy rank.
     """
     sn = models.IntegerField(default=0)
     code = models.CharField(max_length=255, blank=False, null=False)

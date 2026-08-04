@@ -1,7 +1,8 @@
 """Replace TrainingParticipant.participant_type with a ParticipantCategory FK.
 
 Only two of the nine enum values map cleanly; the rest are left NULL rather than swept
-into OTHER. Rationale and the full mapping table: docs/REFERENCE_DATA.md §3.
+into OTHER, which would have put 39% of rows in the catch-all. Each migrated row keeps
+its original value in json_ext['legacy_participant_type'].
 """
 from django.db import migrations, models
 import django.db.models.deletion
@@ -25,7 +26,7 @@ def rename_tmu_staff(apps, schema_editor):
     """TMU_STAFF -> TMU_HQ_STAFF, ahead of the mapping below.
 
     The seeder only ever adds missing codes, so an already-seeded database needs the
-    rename spelled out. See docs/REFERENCE_DATA.md §2.
+    rename spelled out.
     """
     ParticipantCategory = apps.get_model('training', 'ParticipantCategory')
     stale = ParticipantCategory.objects.filter(code='TMU_STAFF')
