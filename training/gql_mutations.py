@@ -21,16 +21,18 @@ from training.models import (
     Training, TrainingCategory, TrainerProfile,
     TrainingAssignment, TrainingParticipant, TrainingMaterial, TrainingEvidence,
     TrainingSession,
+    ParticipantCategory, ParticipantCategoryMutation,
+    JobTitle, JobTitleMutation,
     TrainingMutation, TrainingCategoryMutation, TrainerProfileMutation,
     TrainingAssignmentMutation, TrainingParticipantMutation, TrainingSessionMutation,
-    TrainingMaterialMutation, TrainingEvidenceMutation,
     TrainingStatus, TrainerType, AssignmentRole, AssignmentStatus,
-    ParticipantType, AttendanceStatus,
+    AttendanceStatus, Gender,
 )
 from training.services import (
     TrainingService, TrainingCategoryService, TrainerProfileService,
     TrainingAssignmentService, TrainingParticipantService, TrainingSessionService,
     TrainingMaterialService, TrainingEvidenceService, ConflictService,
+    ParticipantCategoryService, JobTitleService,
 )
 
 
@@ -42,8 +44,8 @@ TrainingStatusEnum = _gql_enum('TrainingStatusInput', TrainingStatus)
 TrainerTypeEnum = _gql_enum('TrainerTypeInput', TrainerType)
 AssignmentRoleEnum = _gql_enum('AssignmentRoleInput', AssignmentRole)
 AssignmentStatusEnum = _gql_enum('AssignmentStatusInput', AssignmentStatus)
-ParticipantTypeEnum = _gql_enum('ParticipantTypeInput', ParticipantType)
 AttendanceStatusEnum = _gql_enum('AttendanceStatusInput', AttendanceStatus)
+GenderEnum = _gql_enum('GenderInput', Gender)
 
 
 def _strip_client(data):
@@ -86,7 +88,7 @@ class UpdateTrainingInput(CreateTrainingInput):
 def _enforce_training_conflicts(user, data):
     """Return an error dict if a HARD conflict blocks the save, else None.
     Pops the non-persisted conflict helper keys from ``data`` in all cases."""
-    ignore = data.pop('ignore_conflicts', False)
+    data.pop('ignore_conflicts', False)  # accepted but never honoured — hard conflicts always block
     trainer_ids = data.pop('conflict_trainer_ids', None)
     staff_ids = data.pop('conflict_staff_user_ids', None)
     if not TrainingConfig.conflict_check_enabled:
@@ -418,10 +420,153 @@ class DeleteTrainingCategoryMutation(BaseHistoryModelDeleteMutationMixin, BaseMu
         ids = graphene.List(graphene.UUID)
 
 
+# --- JobTitle (the RBAC catalogue's 63 substantive titles) -------------------
+class CreateJobTitleInput(OpenIMISMutation.Input):
+    code = graphene.String(required=True)
+    name = graphene.String(required=True)
+    sn = graphene.Int(required=False)
+    user_group_id = graphene.UUID(required=False)
+    is_active = graphene.Boolean(required=False)
+
+
+class CreateJobTitleMutation(BaseHistoryModelCreateMutationMixin, BaseMutation):
+    _mutation_module = "training"
+    _mutation_class = "CreateJobTitleMutation"
+
+    @classmethod
+    def _validate_mutation(cls, user, **data):
+        super()._validate_mutation(user, **data)
+        if not user.has_perms(TrainingConfig.gql_job_title_create_perms):
+            raise PermissionDenied(_("unauthorized"))
+
+    @classmethod
+    def _mutate(cls, user, **data):
+        return _crud_create(user, data, JobTitleService, JobTitle,
+                            JobTitleMutation, 'job_title')
+
+    class Input(CreateJobTitleInput):
+        pass
+
+
+class UpdateJobTitleMutation(BaseHistoryModelUpdateMutationMixin, BaseMutation):
+    _mutation_module = "training"
+    _mutation_class = "UpdateJobTitleMutation"
+    _model = JobTitle
+
+    @classmethod
+    def _validate_mutation(cls, user, **data):
+        super()._validate_mutation(user, **data)
+        if not user.has_perms(TrainingConfig.gql_job_title_update_perms):
+            raise PermissionDenied(_("unauthorized"))
+
+    @classmethod
+    def _mutate(cls, user, **data):
+        return _crud_update(user, data, JobTitleService, JobTitle,
+                            JobTitleMutation, 'job_title')
+
+    class Input(CreateJobTitleInput):
+        id = graphene.UUID(required=True)
+        # Optional on update so a rename does not have to resend the structural code.
+        code = graphene.String(required=False)
+        name = graphene.String(required=False)
+
+
+class DeleteJobTitleMutation(BaseHistoryModelDeleteMutationMixin, BaseMutation):
+    _mutation_module = "training"
+    _mutation_class = "DeleteJobTitleMutation"
+    _model = JobTitle
+
+    @classmethod
+    def _validate_mutation(cls, user, **data):
+        super()._validate_mutation(user, **data)
+        if not user.has_perms(TrainingConfig.gql_job_title_delete_perms):
+            raise PermissionDenied(_("unauthorized"))
+
+    @classmethod
+    def _mutate(cls, user, **data):
+        return _crud_delete(user, data, JobTitleService)
+
+    class Input(OpenIMISMutation.Input):
+        ids = graphene.List(graphene.UUID)
+
+
+# --- ParticipantCategory (who attends; replaces the ParticipantType enum) ----
+class CreateParticipantCategoryInput(OpenIMISMutation.Input):
+    code = graphene.String(required=True)
+    name = graphene.String(required=True)
+    description = graphene.String(required=False)
+    sequence = graphene.Int(required=False)
+    is_active = graphene.Boolean(required=False)
+
+
+class CreateParticipantCategoryMutation(BaseHistoryModelCreateMutationMixin, BaseMutation):
+    _mutation_module = "training"
+    _mutation_class = "CreateParticipantCategoryMutation"
+
+    @classmethod
+    def _validate_mutation(cls, user, **data):
+        super()._validate_mutation(user, **data)
+        if not user.has_perms(TrainingConfig.gql_participant_category_create_perms):
+            raise PermissionDenied(_("unauthorized"))
+
+    @classmethod
+    def _mutate(cls, user, **data):
+        return _crud_create(user, data, ParticipantCategoryService, ParticipantCategory,
+                            ParticipantCategoryMutation, 'participant_category')
+
+    class Input(CreateParticipantCategoryInput):
+        pass
+
+
+class UpdateParticipantCategoryMutation(BaseHistoryModelUpdateMutationMixin, BaseMutation):
+    _mutation_module = "training"
+    _mutation_class = "UpdateParticipantCategoryMutation"
+    _model = ParticipantCategory
+
+    @classmethod
+    def _validate_mutation(cls, user, **data):
+        super()._validate_mutation(user, **data)
+        if not user.has_perms(TrainingConfig.gql_participant_category_update_perms):
+            raise PermissionDenied(_("unauthorized"))
+
+    @classmethod
+    def _mutate(cls, user, **data):
+        return _crud_update(user, data, ParticipantCategoryService, ParticipantCategory,
+                            ParticipantCategoryMutation, 'participant_category')
+
+    class Input(CreateParticipantCategoryInput):
+        id = graphene.UUID(required=True)
+        # A rename is fine, but code/name stay required on create — the code is the stable
+        # key participant rows and reports join on.
+        code = graphene.String(required=False)
+        name = graphene.String(required=False)
+
+
+class DeleteParticipantCategoryMutation(BaseHistoryModelDeleteMutationMixin, BaseMutation):
+    _mutation_module = "training"
+    _mutation_class = "DeleteParticipantCategoryMutation"
+    _model = ParticipantCategory
+
+    @classmethod
+    def _validate_mutation(cls, user, **data):
+        super()._validate_mutation(user, **data)
+        if not user.has_perms(TrainingConfig.gql_participant_category_delete_perms):
+            raise PermissionDenied(_("unauthorized"))
+
+    @classmethod
+    def _mutate(cls, user, **data):
+        return _crud_delete(user, data, ParticipantCategoryService)
+
+    class Input(OpenIMISMutation.Input):
+        ids = graphene.List(graphene.UUID)
+
+
 # --- TrainerProfile --------------------------------------------------------
 class CreateTrainerProfileInput(OpenIMISMutation.Input):
     code = graphene.String(required=False)  # auto-generated by TrainerProfileService on create
     full_name = graphene.String(required=True)
+    gender = graphene.Field(GenderEnum, required=False)
+    position_id = graphene.UUID(required=False)
     email = graphene.String(required=False)
     phone = graphene.String(required=False)
     organization = graphene.String(required=False)
@@ -561,12 +706,16 @@ class DeleteTrainingAssignmentMutation(BaseHistoryModelDeleteMutationMixin, Base
 # --- TrainingParticipant ---------------------------------------------------
 class CreateTrainingParticipantInput(OpenIMISMutation.Input):
     training_id = graphene.UUID(required=True)
+    # Null = a whole-training entry. Set = the attendance register for that one session,
+    # which is what the per-session Community Session Report reads.
+    session_id = graphene.UUID(required=False)
     full_name = graphene.String(required=True)
+    gender = graphene.Field(GenderEnum, required=False)
     phone = graphene.String(required=False)
     email = graphene.String(required=False)
     organization = graphene.String(required=False)
     title = graphene.String(required=False)
-    participant_type = graphene.Field(ParticipantTypeEnum, required=False)
+    category_id = graphene.UUID(required=False)
     internal_user_id = graphene.UUID(required=False)
     location_id = graphene.Int(required=False)
     attendance_status = graphene.Field(AttendanceStatusEnum, required=False)
@@ -610,6 +759,10 @@ class UpdateTrainingParticipantMutation(BaseHistoryModelUpdateMutationMixin, Bas
 
     class Input(CreateTrainingParticipantInput):
         id = graphene.UUID(required=True)
+        # The participants panel edits one cell at a time (gender, attendance), so a
+        # partial update must not have to resend the whole row.
+        training_id = graphene.UUID(required=False)
+        full_name = graphene.String(required=False)
 
 
 class DeleteTrainingParticipantMutation(BaseHistoryModelDeleteMutationMixin, BaseMutation):

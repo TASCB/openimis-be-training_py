@@ -3,11 +3,13 @@ import graphene
 from graphene_django import DjangoObjectType
 
 from core import ExtendedConnection
+from location.models import Location
 from training.models import (
     Training, TrainingCategory, TrainerProfile,
     TrainingAssignment, TrainingParticipant, TrainingMaterial, TrainingEvidence,
-    TrainingSession,
+    TrainingSession, ParticipantCategory, JobTitle, StaffUserGroup,
 )
+from training.services import checkin_open, resolve_paa_reference
 
 
 class TrainingCategoryGQLType(DjangoObjectType):
@@ -28,6 +30,62 @@ class TrainingCategoryGQLType(DjangoObjectType):
         connection_class = ExtendedConnection
 
 
+class ParticipantCategoryGQLType(DjangoObjectType):
+    uuid = graphene.String(source='uuid')
+
+    class Meta:
+        model = ParticipantCategory
+        interfaces = (graphene.relay.Node,)
+        filter_fields = {
+            "id": ["exact"],
+            "code": ["exact", "istartswith", "icontains", "iexact"],
+            "name": ["exact", "istartswith", "icontains", "iexact"],
+            "sequence": ["exact", "lt", "lte", "gt", "gte"],
+            "is_active": ["exact"],
+            "is_deleted": ["exact"],
+            "date_created": ["exact", "lt", "lte", "gt", "gte"],
+            "version": ["exact"],
+        }
+        connection_class = ExtendedConnection
+
+
+class StaffUserGroupGQLType(DjangoObjectType):
+    uuid = graphene.String(source='uuid')
+
+    class Meta:
+        model = StaffUserGroup
+        interfaces = (graphene.relay.Node,)
+        filter_fields = {
+            "id": ["exact"],
+            "code": ["exact", "istartswith", "icontains", "iexact"],
+            "name": ["exact", "istartswith", "icontains", "iexact"],
+            "is_active": ["exact"],
+            "is_deleted": ["exact"],
+            "version": ["exact"],
+        }
+        connection_class = ExtendedConnection
+
+
+class JobTitleGQLType(DjangoObjectType):
+    uuid = graphene.String(source='uuid')
+
+    class Meta:
+        model = JobTitle
+        interfaces = (graphene.relay.Node,)
+        filter_fields = {
+            "id": ["exact"],
+            "sn": ["exact", "lt", "lte", "gt", "gte"],
+            "code": ["exact", "istartswith", "icontains", "iexact"],
+            "name": ["exact", "istartswith", "icontains", "iexact"],
+            "user_group_id": ["exact"],
+            "user_group__code": ["exact", "in"],
+            "is_active": ["exact"],
+            "is_deleted": ["exact"],
+            "version": ["exact"],
+        }
+        connection_class = ExtendedConnection
+
+
 class TrainerProfileGQLType(DjangoObjectType):
     uuid = graphene.String(source='uuid')
 
@@ -38,6 +96,10 @@ class TrainerProfileGQLType(DjangoObjectType):
             "id": ["exact"],
             "code": ["exact", "istartswith", "icontains", "iexact"],
             "full_name": ["exact", "istartswith", "icontains", "iexact"],
+            "gender": ["exact", "in", "isnull"],
+            "position_id": ["exact", "isnull"],
+            "position__code": ["exact", "in"],
+            "position__user_group__code": ["exact", "in"],
             "email": ["exact", "icontains"],
             "phone": ["exact", "icontains"],
             "organization": ["exact", "icontains"],
@@ -98,6 +160,26 @@ class TrainingAssignmentGQLType(DjangoObjectType):
 
 class TrainingParticipantGQLType(DjangoObjectType):
     uuid = graphene.String(source='uuid')
+    # Reporting unit for a participant: the district on the mainland, the island scope
+    # (UNGUJA/PEMBA) in Zanzibar — regardless of how deep the stored location is.
+    paa_reference = graphene.String()
+
+    def resolve_paa_reference(self, info):
+        """Resolved from location_id rather than self.location: the optimizer defers the
+        relation when the query asks only for this field, and a select_related hint then
+        collides with that deferral. Memoised per request, so a list of participants costs
+        one query per distinct location instead of four per row."""
+        if not self.location_id:
+            return None
+        cache = getattr(info.context, '_training_paa_cache', None)
+        if cache is None:
+            cache = {}
+            setattr(info.context, '_training_paa_cache', cache)
+        if self.location_id not in cache:
+            location = (Location.objects.filter(id=self.location_id)
+                        .select_related('parent__parent__parent').first())
+            cache[self.location_id] = resolve_paa_reference(location) if location else None
+        return cache[self.location_id]
 
     class Meta:
         model = TrainingParticipant
@@ -109,7 +191,9 @@ class TrainingParticipantGQLType(DjangoObjectType):
             "training__code": ["icontains"],
             "session_id": ["exact"],
             "full_name": ["exact", "istartswith", "icontains", "iexact"],
-            "participant_type": ["exact", "in"],
+            "gender": ["exact", "in", "isnull"],
+            "category_id": ["exact", "in", "isnull"],
+            "category__code": ["exact", "in"],
             "attendance_status": ["exact", "in"],
             "self_registered": ["exact"],
             "internal_user_id": ["exact"],
@@ -122,6 +206,11 @@ class TrainingParticipantGQLType(DjangoObjectType):
 
 class TrainingSessionGQLType(DjangoObjectType):
     uuid = graphene.String(source='uuid')
+    # Effective public state, not the raw switch.
+    checkin_open = graphene.Boolean()
+
+    def resolve_checkin_open(self, info):
+        return checkin_open(self)
 
     class Meta:
         model = TrainingSession

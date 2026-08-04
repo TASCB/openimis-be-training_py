@@ -32,7 +32,7 @@ class TrainingAssignmentAdmin(admin.ModelAdmin):
 
 @admin.register(TrainingParticipant)
 class TrainingParticipantAdmin(admin.ModelAdmin):
-    list_display = ('training', 'full_name', 'participant_type', 'attendance_status')
+    list_display = ('training', 'full_name', 'category', 'attendance_status')
     search_fields = ('full_name',)
 
 

@@ -12,27 +12,32 @@ from django.utils.translation import gettext as _
 
 from core.schema import OrderedDjangoFilterConnectionField
 from core.services import wait_for_mutation
+from location.models import Location
 
 from training.apps import TrainingConfig
 from training.models import (
     Training, TrainingCategory, TrainerProfile,
     TrainingAssignment, TrainingParticipant, TrainingMaterial, TrainingEvidence,
-    TrainingSession, TERMINAL_STATUSES,
+    TrainingSession, ParticipantCategory, JobTitle, StaffUserGroup,
 )
 from training.gql_queries import (
+    JobTitleGQLType, StaffUserGroupGQLType,
     TrainingGQLType, TrainingCategoryGQLType, TrainerProfileGQLType,
+    ParticipantCategoryGQLType,
     TrainingAssignmentGQLType, TrainingParticipantGQLType, TrainingSessionGQLType,
     TrainingMaterialGQLType, TrainingEvidenceGQLType,
     TrainingConflictGQLType, TrainingSummaryGQLType,
     StatusCountGQLType, CategoryCountGQLType,
 )
-from training.services import ConflictService, TrainingSummaryService
+from training.services import ConflictService, TrainingSummaryService, resolve_paa_reference
 from training.gql_mutations import (
     CreateTrainingMutation, UpdateTrainingMutation, DeleteTrainingMutation,
     SubmitTrainingMutation, ApproveTrainingMutation, RejectTrainingMutation,
     ScheduleTrainingMutation, StartTrainingMutation, CompleteTrainingMutation,
     CancelTrainingMutation, CloseTrainingMutation, RescheduleTrainingMutation,
     CreateTrainingCategoryMutation, UpdateTrainingCategoryMutation, DeleteTrainingCategoryMutation,
+    CreateParticipantCategoryMutation, UpdateParticipantCategoryMutation, DeleteParticipantCategoryMutation,
+    CreateJobTitleMutation, UpdateJobTitleMutation, DeleteJobTitleMutation,
     CreateTrainerProfileMutation, UpdateTrainerProfileMutation, DeleteTrainerProfileMutation,
     CreateTrainingAssignmentMutation, UpdateTrainingAssignmentMutation, DeleteTrainingAssignmentMutation,
     CreateTrainingParticipantMutation, UpdateTrainingParticipantMutation, DeleteTrainingParticipantMutation,
@@ -66,6 +71,15 @@ class Query(graphene.ObjectType):
     )
     training_category = OrderedDjangoFilterConnectionField(
         TrainingCategoryGQLType, orderBy=graphene.List(of_type=graphene.String),
+        show_deleted=graphene.Boolean())
+    participant_category = OrderedDjangoFilterConnectionField(
+        ParticipantCategoryGQLType, orderBy=graphene.List(of_type=graphene.String),
+        show_deleted=graphene.Boolean())
+    job_title = OrderedDjangoFilterConnectionField(
+        JobTitleGQLType, orderBy=graphene.List(of_type=graphene.String),
+        show_deleted=graphene.Boolean())
+    staff_user_group = OrderedDjangoFilterConnectionField(
+        StaffUserGroupGQLType, orderBy=graphene.List(of_type=graphene.String),
         show_deleted=graphene.Boolean())
     trainer_profile = OrderedDjangoFilterConnectionField(
         TrainerProfileGQLType, orderBy=graphene.List(of_type=graphene.String),
@@ -111,6 +125,9 @@ class Query(graphene.ObjectType):
         location_id=graphene.Int(),
     )
 
+    # Lets the form show the PAA live without shipping the Zanzibar mapping to the browser.
+    paa_for_location = graphene.String(location_id=graphene.Int(required=True))
+
     # -- resolvers ----------------------------------------------------------
     def resolve_training(self, info, **kwargs):
         _check(info.context.user, TrainingConfig.gql_training_search_perms)
@@ -127,6 +144,21 @@ class Query(graphene.ObjectType):
         _check(info.context.user, TrainingConfig.gql_training_category_search_perms)
         filters = [] if kwargs.get('show_deleted') else [Q(is_deleted=False)]
         return gql_optimizer.query(TrainingCategory.objects.filter(*filters), info)
+
+    def resolve_participant_category(self, info, **kwargs):
+        _check(info.context.user, TrainingConfig.gql_participant_category_search_perms)
+        filters = [] if kwargs.get('show_deleted') else [Q(is_deleted=False)]
+        return gql_optimizer.query(ParticipantCategory.objects.filter(*filters), info)
+
+    def resolve_job_title(self, info, **kwargs):
+        _check(info.context.user, TrainingConfig.gql_job_title_search_perms)
+        filters = [] if kwargs.get('show_deleted') else [Q(is_deleted=False)]
+        return gql_optimizer.query(JobTitle.objects.filter(*filters), info)
+
+    def resolve_staff_user_group(self, info, **kwargs):
+        _check(info.context.user, TrainingConfig.gql_staff_user_group_search_perms)
+        filters = [] if kwargs.get('show_deleted') else [Q(is_deleted=False)]
+        return gql_optimizer.query(StaffUserGroup.objects.filter(*filters), info)
 
     def resolve_trainer_profile(self, info, **kwargs):
         _check(info.context.user, TrainingConfig.gql_trainer_search_perms)
@@ -186,6 +218,10 @@ class Query(graphene.ObjectType):
         )
         return [TrainingConflictGQLType(**c) for c in conflicts]
 
+    def resolve_paa_for_location(self, info, location_id, **kwargs):
+        _check(info.context.user, TrainingConfig.gql_training_search_perms)
+        return resolve_paa_reference(Location.objects.filter(id=location_id).first())
+
     def resolve_training_summary(self, info, **kwargs):
         _check(info.context.user, TrainingConfig.gql_dashboard_view_perms)
         data = TrainingSummaryService(info.context.user).get_summary(
@@ -223,6 +259,12 @@ class Mutation(graphene.ObjectType):
     create_training_category = CreateTrainingCategoryMutation.Field()
     update_training_category = UpdateTrainingCategoryMutation.Field()
     delete_training_category = DeleteTrainingCategoryMutation.Field()
+    create_job_title = CreateJobTitleMutation.Field()
+    update_job_title = UpdateJobTitleMutation.Field()
+    delete_job_title = DeleteJobTitleMutation.Field()
+    create_participant_category = CreateParticipantCategoryMutation.Field()
+    update_participant_category = UpdateParticipantCategoryMutation.Field()
+    delete_participant_category = DeleteParticipantCategoryMutation.Field()
     # Trainer profile
     create_trainer_profile = CreateTrainerProfileMutation.Field()
     update_trainer_profile = UpdateTrainerProfileMutation.Field()
