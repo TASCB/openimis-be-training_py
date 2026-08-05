@@ -23,6 +23,7 @@ from training.models import (
     TrainingSession,
     ParticipantCategory, ParticipantCategoryMutation,
     JobTitle, JobTitleMutation,
+    TrainingLevel, TrainingLevelMutation,
     TrainingMutation, TrainingCategoryMutation, TrainerProfileMutation,
     TrainingAssignmentMutation, TrainingParticipantMutation, TrainingSessionMutation,
     TrainingStatus, TrainerType, AssignmentRole, AssignmentStatus,
@@ -32,7 +33,7 @@ from training.services import (
     TrainingService, TrainingCategoryService, TrainerProfileService,
     TrainingAssignmentService, TrainingParticipantService, TrainingSessionService,
     TrainingMaterialService, TrainingEvidenceService, ConflictService,
-    ParticipantCategoryService, JobTitleService,
+    ParticipantCategoryService, JobTitleService, TrainingLevelService,
 )
 
 
@@ -66,6 +67,7 @@ class CreateTrainingInput(OpenIMISMutation.Input):
     title = graphene.String(required=True)
     description = graphene.String(required=False)
     category_id = graphene.UUID(required=False)
+    level_id = graphene.UUID(required=False)
     start_datetime = graphene.DateTime(required=True)
     end_datetime = graphene.DateTime(required=True)
     venue = graphene.String(required=False)
@@ -415,6 +417,77 @@ class DeleteTrainingCategoryMutation(BaseHistoryModelDeleteMutationMixin, BaseMu
     @classmethod
     def _mutate(cls, user, **data):
         return _crud_delete(user, data, TrainingCategoryService)
+
+    class Input(OpenIMISMutation.Input):
+        ids = graphene.List(graphene.UUID)
+
+
+# --- TrainingLevel (L1-L4) ---------------------------------------------------
+class CreateTrainingLevelInput(OpenIMISMutation.Input):
+    code = graphene.String(required=True)
+    name = graphene.String(required=True)
+    description = graphene.String(required=False)
+    sequence = graphene.Int(required=False)
+    implementation_location = graphene.String(required=False)
+    reporting_application = graphene.String(required=False)
+    is_active = graphene.Boolean(required=False)
+
+
+class CreateTrainingLevelMutation(BaseHistoryModelCreateMutationMixin, BaseMutation):
+    _mutation_module = "training"
+    _mutation_class = "CreateTrainingLevelMutation"
+
+    @classmethod
+    def _validate_mutation(cls, user, **data):
+        super()._validate_mutation(user, **data)
+        if not user.has_perms(TrainingConfig.gql_training_level_create_perms):
+            raise PermissionDenied(_("unauthorized"))
+
+    @classmethod
+    def _mutate(cls, user, **data):
+        return _crud_create(user, data, TrainingLevelService, TrainingLevel,
+                            TrainingLevelMutation, 'training_level')
+
+    class Input(CreateTrainingLevelInput):
+        pass
+
+
+class UpdateTrainingLevelMutation(BaseHistoryModelUpdateMutationMixin, BaseMutation):
+    _mutation_module = "training"
+    _mutation_class = "UpdateTrainingLevelMutation"
+    _model = TrainingLevel
+
+    @classmethod
+    def _validate_mutation(cls, user, **data):
+        super()._validate_mutation(user, **data)
+        if not user.has_perms(TrainingConfig.gql_training_level_update_perms):
+            raise PermissionDenied(_("unauthorized"))
+
+    @classmethod
+    def _mutate(cls, user, **data):
+        return _crud_update(user, data, TrainingLevelService, TrainingLevel,
+                            TrainingLevelMutation, 'training_level')
+
+    class Input(CreateTrainingLevelInput):
+        id = graphene.UUID(required=True)
+        code = graphene.String(required=False)
+        name = graphene.String(required=False)
+
+
+class DeleteTrainingLevelMutation(BaseHistoryModelDeleteMutationMixin, BaseMutation):
+    _mutation_module = "training"
+    _mutation_class = "DeleteTrainingLevelMutation"
+    _model = TrainingLevel
+
+    @classmethod
+    def _validate_mutation(cls, user, **data):
+        super()._validate_mutation(user, **data)
+        if not user.has_perms(TrainingConfig.gql_training_level_delete_perms):
+            raise PermissionDenied(_("unauthorized"))
+
+    @classmethod
+    def _mutate(cls, user, **data):
+        return _crud_delete(user, data, TrainingLevelService)
 
     class Input(OpenIMISMutation.Input):
         ids = graphene.List(graphene.UUID)

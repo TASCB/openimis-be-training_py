@@ -25,13 +25,13 @@ from training.models import (
     Training, TrainingCategory, TrainerProfile,
     TrainingAssignment, TrainingParticipant, TrainingMaterial, TrainingEvidence,
     TrainingSession, TrainingStatus, TERMINAL_STATUSES, AssignmentStatus,
-    ActivityCodeSequence, ParticipantCategory, JobTitle,
+    ActivityCodeSequence, ParticipantCategory, JobTitle, TrainingLevel,
 )
 from training.validations import (
     TrainingValidation, TrainingCategoryValidation, TrainerProfileValidation,
     TrainingAssignmentValidation, TrainingParticipantValidation,
     TrainingMaterialValidation, TrainingEvidenceValidation, TrainingSessionValidation,
-    ParticipantCategoryValidation, JobTitleValidation,
+    ParticipantCategoryValidation, JobTitleValidation, TrainingLevelValidation,
 )
 
 logger = logging.getLogger(__name__)
@@ -105,6 +105,25 @@ class ParticipantCategoryService(_FalsyDefaultFixMixin, BaseService):
         return self._reapply_falsy_defaults(obj_data, super().update(obj_data))
 
     @register_service_signal('participant_category_service.delete')
+    def delete(self, obj_data):
+        return super().delete(obj_data)
+
+
+class TrainingLevelService(_FalsyDefaultFixMixin, BaseService):
+    OBJECT_TYPE = TrainingLevel
+
+    def __init__(self, user, validation_class=TrainingLevelValidation):
+        super().__init__(user, validation_class)
+
+    @register_service_signal('training_level_service.create')
+    def create(self, obj_data):
+        return super().create(obj_data)
+
+    @register_service_signal('training_level_service.update')
+    def update(self, obj_data):
+        return self._reapply_falsy_defaults(obj_data, super().update(obj_data))
+
+    @register_service_signal('training_level_service.delete')
     def delete(self, obj_data):
         return super().delete(obj_data)
 

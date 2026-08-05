@@ -7,7 +7,7 @@ from location.models import Location
 from training.models import (
     Training, TrainingCategory, TrainerProfile,
     TrainingAssignment, TrainingParticipant, TrainingMaterial, TrainingEvidence,
-    TrainingSession, ParticipantCategory, JobTitle, StaffUserGroup,
+    TrainingSession, ParticipantCategory, JobTitle, StaffUserGroup, TrainingLevel,
 )
 from training.services import checkin_open, resolve_paa_reference
 
@@ -41,9 +41,29 @@ class ParticipantCategoryGQLType(DjangoObjectType):
             "code": ["exact", "istartswith", "icontains", "iexact"],
             "name": ["exact", "istartswith", "icontains", "iexact"],
             "sequence": ["exact", "lt", "lte", "gt", "gte"],
+            "primary_for_levels__code": ["exact", "in"],
+            "facilitator_for_levels__code": ["exact", "in"],
             "is_active": ["exact"],
             "is_deleted": ["exact"],
             "date_created": ["exact", "lt", "lte", "gt", "gte"],
+            "version": ["exact"],
+        }
+        connection_class = ExtendedConnection
+
+
+class TrainingLevelGQLType(DjangoObjectType):
+    uuid = graphene.String(source='uuid')
+
+    class Meta:
+        model = TrainingLevel
+        interfaces = (graphene.relay.Node,)
+        filter_fields = {
+            "id": ["exact"],
+            "code": ["exact", "istartswith", "icontains", "iexact"],
+            "name": ["exact", "istartswith", "icontains", "iexact"],
+            "sequence": ["exact", "lt", "lte", "gt", "gte"],
+            "is_active": ["exact"],
+            "is_deleted": ["exact"],
             "version": ["exact"],
         }
         connection_class = ExtendedConnection
@@ -126,6 +146,8 @@ class TrainingGQLType(DjangoObjectType):
             "venue": ["exact", "icontains"],
             "paa_reference": ["exact", "icontains"],
             "category_id": ["exact"],
+            "level_id": ["exact"],
+            "level__code": ["exact", "in"],
             "location_id": ["exact"],
             # reverse relation → GraphQL arg "assignments_Trainer_Id" (searcher trainer filter)
             "assignments__trainer__id": ["exact"],

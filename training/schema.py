@@ -18,10 +18,10 @@ from training.apps import TrainingConfig
 from training.models import (
     Training, TrainingCategory, TrainerProfile,
     TrainingAssignment, TrainingParticipant, TrainingMaterial, TrainingEvidence,
-    TrainingSession, ParticipantCategory, JobTitle, StaffUserGroup,
+    TrainingSession, ParticipantCategory, JobTitle, StaffUserGroup, TrainingLevel,
 )
 from training.gql_queries import (
-    JobTitleGQLType, StaffUserGroupGQLType,
+    JobTitleGQLType, StaffUserGroupGQLType, TrainingLevelGQLType,
     TrainingGQLType, TrainingCategoryGQLType, TrainerProfileGQLType,
     ParticipantCategoryGQLType,
     TrainingAssignmentGQLType, TrainingParticipantGQLType, TrainingSessionGQLType,
@@ -38,6 +38,7 @@ from training.gql_mutations import (
     CreateTrainingCategoryMutation, UpdateTrainingCategoryMutation, DeleteTrainingCategoryMutation,
     CreateParticipantCategoryMutation, UpdateParticipantCategoryMutation, DeleteParticipantCategoryMutation,
     CreateJobTitleMutation, UpdateJobTitleMutation, DeleteJobTitleMutation,
+    CreateTrainingLevelMutation, UpdateTrainingLevelMutation, DeleteTrainingLevelMutation,
     CreateTrainerProfileMutation, UpdateTrainerProfileMutation, DeleteTrainerProfileMutation,
     CreateTrainingAssignmentMutation, UpdateTrainingAssignmentMutation, DeleteTrainingAssignmentMutation,
     CreateTrainingParticipantMutation, UpdateTrainingParticipantMutation, DeleteTrainingParticipantMutation,
@@ -74,6 +75,9 @@ class Query(graphene.ObjectType):
         show_deleted=graphene.Boolean())
     participant_category = OrderedDjangoFilterConnectionField(
         ParticipantCategoryGQLType, orderBy=graphene.List(of_type=graphene.String),
+        show_deleted=graphene.Boolean())
+    training_level = OrderedDjangoFilterConnectionField(
+        TrainingLevelGQLType, orderBy=graphene.List(of_type=graphene.String),
         show_deleted=graphene.Boolean())
     job_title = OrderedDjangoFilterConnectionField(
         JobTitleGQLType, orderBy=graphene.List(of_type=graphene.String),
@@ -149,6 +153,11 @@ class Query(graphene.ObjectType):
         _check(info.context.user, TrainingConfig.gql_participant_category_search_perms)
         filters = [] if kwargs.get('show_deleted') else [Q(is_deleted=False)]
         return gql_optimizer.query(ParticipantCategory.objects.filter(*filters), info)
+
+    def resolve_training_level(self, info, **kwargs):
+        _check(info.context.user, TrainingConfig.gql_training_level_search_perms)
+        filters = [] if kwargs.get('show_deleted') else [Q(is_deleted=False)]
+        return gql_optimizer.query(TrainingLevel.objects.filter(*filters), info)
 
     def resolve_job_title(self, info, **kwargs):
         _check(info.context.user, TrainingConfig.gql_job_title_search_perms)
@@ -259,6 +268,9 @@ class Mutation(graphene.ObjectType):
     create_training_category = CreateTrainingCategoryMutation.Field()
     update_training_category = UpdateTrainingCategoryMutation.Field()
     delete_training_category = DeleteTrainingCategoryMutation.Field()
+    create_training_level = CreateTrainingLevelMutation.Field()
+    update_training_level = UpdateTrainingLevelMutation.Field()
+    delete_training_level = DeleteTrainingLevelMutation.Field()
     create_job_title = CreateJobTitleMutation.Field()
     update_job_title = UpdateJobTitleMutation.Field()
     delete_job_title = DeleteJobTitleMutation.Field()

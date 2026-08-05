@@ -116,6 +116,31 @@ class ParticipantCategory(HistoryModel):
         return f'{self.code} - {self.name}'
 
 
+class TrainingLevel(HistoryModel):
+    """One of the four levels a training runs at (L1-L4)."""
+    code = models.CharField(max_length=10, blank=False, null=False)
+    name = models.CharField(max_length=255, blank=False, null=False)
+    description = models.TextField(blank=True, null=True)
+    sequence = models.IntegerField(default=0)
+    implementation_location = models.CharField(max_length=255, blank=True, null=True)
+    reporting_application = models.CharField(max_length=255, blank=True, null=True)
+    primary_categories = models.ManyToManyField(
+        ParticipantCategory, blank=True, related_name='primary_for_levels')
+    facilitator_categories = models.ManyToManyField(
+        ParticipantCategory, blank=True, related_name='facilitator_for_levels')
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['code']),
+            models.Index(fields=['sequence']),
+            models.Index(fields=['is_active']),
+        ]
+
+    def __str__(self):
+        return f'{self.code} - {self.name}'
+
+
 class StaffUserGroup(HistoryModel):
     """One of the eight TASAF user groups (UG01-UG08), from the RBAC catalogue."""
     code = models.CharField(max_length=10, blank=False, null=False)
@@ -196,6 +221,9 @@ class Training(HistoryModel):
     category = models.ForeignKey(
         TrainingCategory, on_delete=models.DO_NOTHING, blank=True, null=True,
         related_name='trainings')
+    level = models.ForeignKey(
+        TrainingLevel, on_delete=models.DO_NOTHING, blank=True, null=True,
+        related_name='trainings')
     start_datetime = DateTimeField(blank=False, null=False)
     end_datetime = DateTimeField(blank=False, null=False)
     venue = models.CharField(max_length=255, blank=True, null=True)
@@ -216,6 +244,7 @@ class Training(HistoryModel):
             models.Index(fields=['start_datetime']),
             models.Index(fields=['end_datetime']),
             models.Index(fields=['category']),
+            models.Index(fields=['level']),
             models.Index(fields=['location']),
         ]
 
@@ -392,6 +421,11 @@ class StaffUserGroupMutation(UUIDModel, ObjectMutation):
 class JobTitleMutation(UUIDModel, ObjectMutation):
     job_title = models.ForeignKey(JobTitle, models.DO_NOTHING, related_name='mutations')
     mutation = models.ForeignKey(MutationLog, models.DO_NOTHING, related_name='job_titles')
+
+
+class TrainingLevelMutation(UUIDModel, ObjectMutation):
+    training_level = models.ForeignKey(TrainingLevel, models.DO_NOTHING, related_name='mutations')
+    mutation = models.ForeignKey(MutationLog, models.DO_NOTHING, related_name='training_levels')
 
 
 class ParticipantCategoryMutation(UUIDModel, ObjectMutation):

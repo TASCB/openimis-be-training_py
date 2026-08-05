@@ -65,6 +65,22 @@ DEFAULT_PARTICIPANT_CATEGORIES = [
     ('OTHER', 'Other', 999),
 ]
 
+DEFAULT_TRAINING_LEVELS = [
+    # (code, name, sequence, implementation_location, reporting_application,
+    #  primary category codes, facilitator category codes)
+    ('L1', 'TMU Headquarters', 10, 'TASAF Headquarters', 'Headquarters training reports',
+     ['TMU_HQ_STAFF'], ['TMU_HQ_STAFF']),
+    ('L2', 'Training of Trainers (TOT)', 20, 'Designated TOT venue', 'TOT reports',
+     ['TMO', 'PSSNC', 'PSSNA'], ['TMU_HQ_STAFF']),
+    ('L3', 'Local Government Authorities', 30, 'PAA / Local Government Authority',
+     'PAA facilitator training reports',
+     ['PAAF'], ['PSSNC']),
+    ('L4', 'Community Level', 40, 'Village / Mtaa / Shehia and community',
+     'Community training and targeting reports',
+     ['VC', 'VILLAGE_COUNCIL_MEMBER', 'VEO', 'SHEHA', 'MEO', 'MITAA_COMMITTEE_LEADER', 'CMC'],
+     ['PAAF', 'COMMUNITY_MEMBER']),
+]
+
 # User groups and job titles, generated from the TASAF RBAC catalogue. A job title is not
 # an openIMIS role: roles are permission bundles shared across titles, so a title cannot
 # be derived from a user's roles.
@@ -194,6 +210,11 @@ DEFAULT_CONFIG = {
     'gql_participant_category_create_perms': ['211002'],
     'gql_participant_category_update_perms': ['211003'],
     'gql_participant_category_delete_perms': ['211004'],
+    # --- Training level (2114xx) ---
+    'gql_training_level_search_perms': ['211401'],
+    'gql_training_level_create_perms': ['211402'],
+    'gql_training_level_update_perms': ['211403'],
+    'gql_training_level_delete_perms': ['211404'],
     # --- Job title / user group (2111xx, 2112xx) ---
     'gql_job_title_search_perms': ['211101'],
     'gql_job_title_create_perms': ['211102'],
@@ -215,6 +236,7 @@ DEFAULT_CONFIG = {
     'seed_programme_areas': True,
     'seed_participant_categories': True,
     'seed_job_titles': True,
+    'seed_training_levels': True,
 }
 
 ALL_RIGHTS = [
@@ -229,6 +251,7 @@ ALL_RIGHTS = [
     210901, 210902, 210903, 210904,
     211001, 211002, 211003, 211004,
     211101, 211102, 211103, 211104,
+    211401, 211402, 211403, 211404,
     211201,
     211301,
 ]
@@ -275,6 +298,10 @@ class TrainingConfig(AppConfig):
     gql_participant_category_create_perms = []
     gql_participant_category_update_perms = []
     gql_participant_category_delete_perms = []
+    gql_training_level_search_perms = []
+    gql_training_level_create_perms = []
+    gql_training_level_update_perms = []
+    gql_training_level_delete_perms = []
     gql_job_title_search_perms = []
     gql_job_title_create_perms = []
     gql_job_title_update_perms = []
@@ -292,6 +319,7 @@ class TrainingConfig(AppConfig):
     seed_programme_areas = True
     seed_participant_categories = True
     seed_job_titles = True
+    seed_training_levels = True
 
     def ready(self):
         from core.models import ModuleConfiguration
@@ -328,6 +356,11 @@ def on_post_migrate(sender, **kwargs):
             _seed_job_titles(apps)
     except Exception as exc:
         logger.warning("training: job-title seeding skipped (%s)", exc)
+    try:
+        if TrainingConfig.seed_training_levels:
+            _seed_training_levels(apps)
+    except Exception as exc:
+        logger.warning("training: training-level seeding skipped (%s)", exc)
 
 
 def _seed_admin_rights(apps):
@@ -392,3 +425,25 @@ def _seed_job_titles(apps):
             JobTitle.objects.create(
                 id=uuid.uuid4(), sn=sn, code=code, name=name,
                 user_group_id=groups.get(group_code), is_active=True, **audit)
+
+
+def _seed_training_levels(apps):
+    """Seed L1-L4 and their permitted participant categories, idempotent by code."""
+    TrainingLevel = apps.get_model('training', 'TrainingLevel')
+    ParticipantCategory = apps.get_model('training', 'ParticipantCategory')
+    User = apps.get_model('core', 'User')
+    admin = User.objects.order_by('id').first()
+    if not admin:
+        return
+
+    categories = dict(ParticipantCategory.objects.values_list('code', 'id'))
+    audit = {'version': 1, 'user_created_id': admin.id, 'user_updated_id': admin.id}
+    for code, name, sequence, location, reporting, primary, facilitators in DEFAULT_TRAINING_LEVELS:
+        if TrainingLevel.objects.filter(code=code).exists():
+            continue
+        level = TrainingLevel.objects.create(
+            id=uuid.uuid4(), code=code, name=name, sequence=sequence,
+            implementation_location=location, reporting_application=reporting,
+            is_active=True, **audit)
+        level.primary_categories.set([categories[c] for c in primary if c in categories])
+        level.facilitator_categories.set([categories[c] for c in facilitators if c in categories])
