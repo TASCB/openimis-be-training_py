@@ -19,7 +19,9 @@ from core.models import User
 from location.models import Location
 
 from training.models import (
-    Training, TrainingParticipant, TrainingCategory, TrainingStatus,
+    Training, TrainingParticipant, TrainingCategory, TrainingStatus, TrainingSession,
+    TrainingAssignment, TrainingMaterial, TrainingEvidence, TrainingMutation,
+    TrainingSessionMutation, TrainingParticipantMutation,
     Gender, ParticipantCategory, AttendanceStatus,
 )
 from training.services import TrainingService, TrainingParticipantService, resolve_paa_reference
@@ -67,8 +69,18 @@ class Command(BaseCommand):
         participants = TrainingParticipant.objects.filter(json_ext___seed='demo')
         trainings = Training.objects.filter(json_ext___seed='demo')
         counts = (participants.count(), trainings.count())
-        participants.delete()
-        trainings.delete()
+        # rows the service and UI add without the seed tag go first
+        with transaction.atomic():
+            sessions = TrainingSession.objects.filter(training__in=trainings)
+            TrainingSessionMutation.objects.filter(training_session__in=sessions).delete()
+            TrainingParticipantMutation.objects.filter(
+                training_participant__training__in=trainings).delete()
+            TrainingMutation.objects.filter(training__in=trainings).delete()
+            participants.delete()
+            for model in (TrainingParticipant, TrainingSession, TrainingAssignment,
+                          TrainingMaterial, TrainingEvidence):
+                model.objects.filter(training__in=trainings).delete()
+            trainings.delete()
         self.stdout.write(self.style.WARNING(
             f'Removed {counts[0]} demo participant(s) and {counts[1]} demo training(s).'))
 

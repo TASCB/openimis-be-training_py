@@ -53,14 +53,12 @@ def _check(user, perms):
 
 
 def _location_filter(parent_location, parent_location_level):
-    """Build a Q traversing the location hierarchy from a parent location uuid,
-    mirroring individual.schema._get_location_filters (DetailedLocationFilter)."""
     from location.apps import LocationConfig
-    query_key = "uuid"
-    for _i in range(len(LocationConfig.location_types) - parent_location_level - 1):
-        query_key = "parent__" + query_key
-    query_key = "location__" + query_key
-    return Q(**{query_key: parent_location})
+    q, key = Q(), "location__uuid"
+    for _i in range(len(LocationConfig.location_types)):
+        q |= Q(**{key: parent_location})
+        key = key.replace("location__", "location__parent__", 1)
+    return q
 
 
 class Query(graphene.ObjectType):
@@ -69,6 +67,8 @@ class Query(graphene.ObjectType):
         orderBy=graphene.List(of_type=graphene.String),
         client_mutation_id=graphene.String(),
         show_deleted=graphene.Boolean(),
+        parent_location=graphene.String(),
+        parent_location_level=graphene.Int(),
     )
     training_category = OrderedDjangoFilterConnectionField(
         TrainingCategoryGQLType, orderBy=graphene.List(of_type=graphene.String),
@@ -140,6 +140,8 @@ class Query(graphene.ObjectType):
         if client_mutation_id:
             wait_for_mutation(client_mutation_id)
             filters.append(Q(mutations__mutation__client_mutation_id=client_mutation_id))
+        if kwargs.get('parent_location') is not None:
+            filters.append(_location_filter(kwargs['parent_location'], kwargs.get('parent_location_level')))
         # .distinct() guards against duplicate rows when filtering across the
         # reverse `assignments` relation (e.g. assignments_Trainer_Id).
         return gql_optimizer.query(Training.objects.filter(*filters).distinct(), info)
