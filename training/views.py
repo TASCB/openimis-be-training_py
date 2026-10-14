@@ -22,7 +22,7 @@ from training.models import (
     Training, TrainingMaterial, TrainingEvidence,
     TrainingSession, TrainingParticipant, AttendanceStatus, CheckInMethod, Gender,
 )
-from training.services import TrainingMaterialService, TrainingEvidenceService, checkin_open
+from training.services import TrainingMaterialService, TrainingEvidenceService, checkin_open, normalize_phone
 
 logger = logging.getLogger(__name__)
 
@@ -156,11 +156,16 @@ class TrainingCheckinView(views.APIView):
             return Response({'error': 'captcha'}, status=400)
 
         full_name = (data.get('full_name') or '').strip()
-        phone = (data.get('phone') or '').strip().replace(' ', '')
-        if not full_name or not phone:
+        raw_phone = (data.get('phone') or '').strip()
+        if not full_name or not raw_phone:
             return Response({'error': 'missing_fields', 'fields': ['full_name', 'phone']}, status=400)
+        phone = normalize_phone(raw_phone)
+        if not phone:
+            return Response({'error': 'invalid_phone', 'fields': ['phone']}, status=400)
 
-        if TrainingParticipant.objects.filter(session=session, phone=phone, is_deleted=False).exists():
+        registered = TrainingParticipant.objects.filter(
+            session=session, is_deleted=False).exclude(phone__isnull=True).values_list('phone', flat=True)
+        if any(normalize_phone(p) == phone for p in registered):
             return Response({'ok': True, 'already': True})
 
         gender = data.get('gender')

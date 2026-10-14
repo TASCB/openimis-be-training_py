@@ -7,6 +7,7 @@ Per-entity CRUD services extend ``core.services.BaseService`` (uniform
 flow can later wrap (see docs/06-workflow-status.md).
 """
 import logging
+import re
 from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
@@ -202,11 +203,11 @@ class TrainingParticipantService(BaseService):
 
     @register_service_signal('training_participant_service.create')
     def create(self, obj_data):
-        return super().create(obj_data)
+        return super().create(_normalized_phone_data(obj_data))
 
     @register_service_signal('training_participant_service.update')
     def update(self, obj_data):
-        return super().update(obj_data)
+        return super().update(_normalized_phone_data(obj_data))
 
     @register_service_signal('training_participant_service.delete')
     def delete(self, obj_data):
@@ -250,6 +251,21 @@ def _auto_open_today(session):
     ends = datetime.combine(session.session_date, session.end_time or time.max) \
         + timedelta(minutes=TrainingConfig.checkin_open_minutes_after)
     return starts <= _local_now() <= ends
+
+
+def normalize_phone(raw):
+    """Tanzanian mobile number as 0XXXXXXXXX, or None when it is not one."""
+    digits = re.sub(r'\D', '', raw or '')
+    if digits.startswith('255') and len(digits) == 12:
+        digits = '0' + digits[3:]
+    elif len(digits) == 9:
+        digits = '0' + digits
+    return digits if re.fullmatch(r'0[67]\d{8}', digits) else None
+
+
+def _normalized_phone_data(obj_data):
+    phone = normalize_phone(obj_data.get('phone')) if obj_data.get('phone') else None
+    return {**obj_data, 'phone': phone} if phone else obj_data
 
 
 def checkin_open(session):
